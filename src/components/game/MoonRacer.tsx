@@ -487,25 +487,37 @@ export default function MoonRacer() {
     window.addEventListener("keyup", onKeyUp);
 
     // Pointer / touch steering: drag horizontally to aim the car.
+    // touch-action:none stops iOS Safari from scrolling / pull-to-refreshing
+    // and from firing double-tap zoom while the player drags to steer.
+    const el = renderer.domElement;
+    el.style.touchAction = "none";
+    el.style.cursor = "grab";
     let pointerActive = false;
     const onPointerMove = (clientX: number) => {
       if (!pointerActive) return;
-      const rect = renderer.domElement.getBoundingClientRect();
+      const rect = el.getBoundingClientRect();
       const nx = ((clientX - rect.left) / rect.width) * 2 - 1;
       gs.current.targetX = nx * (ROAD_HALF - CAR_HALF_WIDTH);
     };
     const pd = (e: PointerEvent) => {
+      e.preventDefault();
       pointerActive = true;
+      // A tap on the canvas also starts/restarts the race (unlocks iOS audio
+      // inside the gesture).
+      if (gs.current.phase !== "playing") startGameRef.current();
       onPointerMove(e.clientX);
     };
-    const pm = (e: PointerEvent) => onPointerMove(e.clientX);
+    const pm = (e: PointerEvent) => {
+      if (pointerActive) e.preventDefault();
+      onPointerMove(e.clientX);
+    };
     const pu = () => {
       pointerActive = false;
     };
-    const el = renderer.domElement;
     el.addEventListener("pointerdown", pd);
     el.addEventListener("pointermove", pm);
     window.addEventListener("pointerup", pu);
+    window.addEventListener("pointercancel", pu);
 
     // Expose steer/boost setters for on-screen buttons via custom events.
     const onControl = (e: Event) => {
@@ -709,6 +721,7 @@ export default function MoonRacer() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("pointerup", pu);
+      window.removeEventListener("pointercancel", pu);
       window.removeEventListener("moonracer-control", onControl);
       el.removeEventListener("pointerdown", pd);
       el.removeEventListener("pointermove", pm);
@@ -738,8 +751,11 @@ export default function MoonRacer() {
   const start = () => startGameRef.current();
 
   return (
-    <div className="relative w-full h-full select-none">
-      <div ref={mountRef} className="absolute inset-0" />
+    <div
+      className="relative w-full h-full select-none touch-none"
+      style={{ WebkitTapHighlightColor: "transparent" }}
+    >
+      <div ref={mountRef} className="absolute inset-0 touch-none" />
 
       {/* Scanline / vignette overlay for the cyberpunk feel */}
       <div
@@ -798,31 +814,43 @@ export default function MoonRacer() {
 
         <div className="flex-1" />
 
-        {/* Mobile touch controls */}
-        <div className="md:hidden flex items-center justify-between gap-3">
-          <div className="flex gap-3">
+        {/* Mobile touch controls (also padded clear of the iPhone home bar) */}
+        <div
+          className="md:hidden flex items-center justify-between gap-3"
+          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        >
+          <div className="flex gap-4">
             <button
-              className="pointer-events-auto glass rounded-2xl w-16 h-16 text-2xl active:bg-white/10"
-              onPointerDown={() => sendControl({ steer: -1 })}
+              aria-label="Steer left"
+              className="pointer-events-auto touch-none glass rounded-2xl w-[4.5rem] h-[4.5rem] text-2xl active:bg-white/10"
+              onContextMenu={(e) => e.preventDefault()}
+              onPointerDown={(e) => { e.preventDefault(); sendControl({ steer: -1 }); }}
               onPointerUp={() => sendControl({ steer: 0 })}
               onPointerLeave={() => sendControl({ steer: 0 })}
+              onPointerCancel={() => sendControl({ steer: 0 })}
             >
               ◀
             </button>
             <button
-              className="pointer-events-auto glass rounded-2xl w-16 h-16 text-2xl active:bg-white/10"
-              onPointerDown={() => sendControl({ steer: 1 })}
+              aria-label="Steer right"
+              className="pointer-events-auto touch-none glass rounded-2xl w-[4.5rem] h-[4.5rem] text-2xl active:bg-white/10"
+              onContextMenu={(e) => e.preventDefault()}
+              onPointerDown={(e) => { e.preventDefault(); sendControl({ steer: 1 }); }}
               onPointerUp={() => sendControl({ steer: 0 })}
               onPointerLeave={() => sendControl({ steer: 0 })}
+              onPointerCancel={() => sendControl({ steer: 0 })}
             >
               ▶
             </button>
           </div>
           <button
-            className="pointer-events-auto glass rounded-2xl w-16 h-16 text-2xl active:bg-white/10"
-            onPointerDown={() => sendControl({ boost: 1 })}
+            aria-label="Boost"
+            className="pointer-events-auto touch-none glass rounded-2xl w-[4.5rem] h-[4.5rem] text-2xl active:bg-white/10"
+            onContextMenu={(e) => e.preventDefault()}
+            onPointerDown={(e) => { e.preventDefault(); sendControl({ boost: 1 }); }}
             onPointerUp={() => sendControl({ boost: 0 })}
             onPointerLeave={() => sendControl({ boost: 0 })}
+            onPointerCancel={() => sendControl({ boost: 0 })}
           >
             🚀
           </button>
@@ -860,9 +888,13 @@ export default function MoonRacer() {
             <div className="mt-5 text-xs text-text-secondary leading-relaxed">
               <span className="text-text-primary font-medium">Controls</span>
               <br />
-              ← → or A / D to steer · ↑ ↓ to boost / brake
-              <br />
-              Drag on screen to steer · Space to start
+              {/* Touch-first hint on phones, keyboard hint on desktop. */}
+              <span className="md:hidden">
+                Drag to steer, or use the ◀ ▶ buttons · hold 🚀 to boost
+              </span>
+              <span className="hidden md:inline">
+                ← → or A / D to steer · ↑ ↓ to boost / brake · Space to start
+              </span>
             </div>
           </div>
         </div>

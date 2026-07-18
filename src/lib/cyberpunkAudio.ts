@@ -86,6 +86,9 @@ export class CyberpunkAudio {
   async start() {
     this.ensureContext();
     if (!this.ctx) return;
+    // iOS Safari starts the context suspended and can drop the first sounds
+    // until a silent buffer has played inside the unlocking gesture.
+    this.unlockIOS();
     if (this.ctx.state === "suspended") {
       await this.ctx.resume();
     }
@@ -97,6 +100,22 @@ export class CyberpunkAudio {
     this.step = 0;
     this.nextNoteTime = this.ctx.currentTime + 0.08;
     this.scheduler();
+  }
+
+  private _unlocked = false;
+  /** Play a one-sample silent buffer to fully unlock audio on iOS. */
+  private unlockIOS() {
+    if (this._unlocked || !this.ctx) return;
+    this._unlocked = true;
+    try {
+      const buf = this.ctx.createBuffer(1, 1, this.ctx.sampleRate);
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(this.ctx.destination);
+      src.start(0);
+    } catch {
+      /* ignore */
+    }
   }
 
   /** Stop everything and release the audio graph tail. */
