@@ -12,7 +12,8 @@
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; padding: 0; height: 100%; width: 100%; background: #05030f; color: #e2e8f0; overflow: hidden;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif; -webkit-user-select: none; user-select: none; overscroll-behavior: none; }
-  #app { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; touch-action: none; }
+  /* absolute+inset fills the iframe/panel reliably even when 100dvh resolves to 0 */
+  #app { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 320px; touch-action: none; }
   #app canvas { display: block; touch-action: none; }
   .vignette { pointer-events: none; position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(5,3,15,0.55) 100%); }
 
@@ -3970,6 +3971,9 @@ three/build/three.module.js:
 (function () {
   const THREE = window.THREE;
 
+  function showFatal(msg){var c=document.getElementById("card");if(c)c.innerHTML='<h1 style="color:#fff;font-size:22px;margin:0 0 10px">Can’t run 3D here</h1><p style="color:#94a3b8;font-size:14px;line-height:1.5;margin:0">'+msg+'</p>';}
+  if(!THREE){showFatal("The 3D engine didn’t load. Open the full-screen link and try again.");return;}
+
   /* ============================ AUDIO ============================ */
   class CyberpunkAudio {
     constructor(){this.ctx=null;this.master=null;this.musicGain=null;this.sfxGain=null;this.noiseBuffer=null;this.schedulerId=null;this.nextNoteTime=0;this.step=0;this.bpm=128;this.stepsPerBeat=4;this.lookahead=0.025;this.scheduleAhead=0.12;this.engineOsc=null;this.engineGain=null;this.engineFilter=null;this._engineSub=null;this._playing=false;this._muted=false;this._unlocked=false;this.chordRoots=[220.0,174.61,261.63,196.0];this.arpPattern=[0,7,12,7,3,10,12,15];}
@@ -4107,9 +4111,12 @@ three/build/three.module.js:
   el.best.textContent=state.best.toLocaleString();
 
   /* ============================ SCENE ============================ */
-  const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false});
+  let renderer;
+  try{ renderer=new THREE.WebGLRenderer({antialias:true,alpha:false}); }
+  catch(err){ showFatal("This preview blocked WebGL. Tap the full-screen link to play the game."); return; }
+  if(!renderer.getContext()){ showFatal("WebGL isn’t available in this view. Tap the full-screen link to play."); return; }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
-  renderer.setSize(app.clientWidth,app.clientHeight);
+  renderer.setSize(app.clientWidth||window.innerWidth||360,app.clientHeight||window.innerHeight||640);
   renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;
   renderer.domElement.style.touchAction="none";
   app.insertBefore(renderer.domElement,app.firstChild);
@@ -4287,10 +4294,13 @@ three/build/three.module.js:
   }
 
   /* ============================ RESIZE ============================ */
-  function onResize(){const w=app.clientWidth,h=app.clientHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();}
+  function onResize(){const w=app.clientWidth||window.innerWidth||360;const h=app.clientHeight||window.innerHeight||640;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();}
   window.addEventListener("resize",onResize);
+  window.addEventListener("load",onResize);
   window.addEventListener("orientationchange",()=>setTimeout(onResize,200));
   if(window.visualViewport)window.visualViewport.addEventListener("resize",onResize);
+  // Re-fit after the container settles (embedded panels/iframes lay out late).
+  requestAnimationFrame(onResize);setTimeout(onResize,300);setTimeout(onResize,1000);
 
   /* ============================ LOOP ============================ */
   const clock=new THREE.Clock();let hudAcc=0;let boostSfxCooldown=0;
