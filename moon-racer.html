@@ -80,11 +80,11 @@
   .popups { pointer-events:none; position:absolute; inset:0; overflow:hidden; }
   .pop { position:absolute; transform:translate(-50%,-50%); font-weight:900; white-space:nowrap; animation:popUp .9s ease-out forwards; text-shadow:0 2px 10px rgba(0,0,0,0.6); }
   @keyframes popUp { 0%{opacity:0; transform:translate(-50%,-50%) scale(.6);} 15%{opacity:1; transform:translate(-50%,-60%) scale(1.1);} 100%{opacity:0; transform:translate(-50%,-160%) scale(1);} }
-  .toasts { pointer-events:none; position:absolute; left:50%; top:24%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .toasts { pointer-events:none; position:absolute; left:50%; top:13%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:6px; }
   .toast { font-weight:800; padding:8px 16px; border-radius:12px; animation:toastIn .5s ease, toastOut .4s ease 1.6s forwards; box-shadow:0 6px 24px rgba(0,0,0,0.4); }
   @keyframes toastIn { from{opacity:0; transform:translateY(12px) scale(.9);} to{opacity:1;} }
   @keyframes toastOut { to{opacity:0; transform:translateY(-12px);} }
-  .banner { position:absolute; left:50%; top:34%; transform:translateX(-50%); font-size:34px; font-weight:900; letter-spacing:.04em; text-align:center; pointer-events:none; opacity:0; }
+  .banner { position:absolute; left:50%; top:12%; transform:translateX(-50%); font-size:22px; font-weight:900; letter-spacing:.04em; text-align:center; pointer-events:none; opacity:0; }
   .banner.show { animation:bannerPop 1.4s ease forwards; }
   @keyframes bannerPop { 0%{opacity:0; transform:translateX(-50%) scale(.5);} 20%{opacity:1; transform:translateX(-50%) scale(1.1);} 80%{opacity:1;} 100%{opacity:0; transform:translateX(-50%) scale(1.05);} }
 
@@ -4232,11 +4232,9 @@ three/build/three.module.js:
       const flame=new THREE.Mesh(new THREE.ConeGeometry(0.22,1.1,14),flameMat);flame.rotation.x=-Math.PI/2;flame.position.set(sx,0.5,2.65);car.add(flame);carParts.flames.push(flame);
     }
     const hoop=new THREE.Mesh(new THREE.TorusGeometry(0.5,0.05,8,16,Math.PI),chromeMat);hoop.position.set(0,0.75,0.7);car.add(hoop);
-    const headL=new THREE.SpotLight(0xbfe9ff,7,60,Math.PI/7,0.5,1.2);headL.position.set(0,1.2,-1.8);const ht=new THREE.Object3D();ht.position.set(0,0,-40);car.add(ht);headL.target=ht;car.add(headL);
     const under=new THREE.PointLight(0x00e5ff,5,12,2);under.position.set(0,0.6,0);car.add(under);carParts.under=under;
     // wingman drones (1945-style support ships)
     carParts.wings=[];for(const sx of[-1,1]){const w=new THREE.Group();const wb=new THREE.Mesh(new THREE.SphereGeometry(0.5,12,10),M({color:0x113322,metalness:0.8,roughness:0.3,emissive:0x0a3322,emissiveIntensity:0.6}));wb.scale.set(1.4,0.55,1.6);w.add(wb);const wg=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.1,0.7,8),M({color:0x66ff88,emissive:0x33ff66,emissiveIntensity:2.6}));wg.rotation.x=Math.PI/2;wg.position.set(0,0,-0.6);w.add(wg);w.position.set(sx*2.7,0.5,0.5);w.visible=false;car.add(w);carParts.wings.push(w);}
-    const rearL=new THREE.PointLight(0xff2bd6,3,10,2);rearL.position.set(0,0.7,2.1);car.add(rearL);
     // shield bubble
     const shield=new THREE.Mesh(new THREE.SphereGeometry(2.4,20,16),new THREE.MeshBasicMaterial({color:0x66ccff,transparent:true,opacity:0.0,side:THREE.DoubleSide}));shield.position.y=0.7;car.add(shield);carParts.shield=shield;
     return car;
@@ -4280,11 +4278,11 @@ three/build/three.module.js:
   try{ renderer=new THREE.WebGLRenderer({antialias:true,alpha:false}); }
   catch(err){ showFatal("This preview blocked WebGL. Tap the full-screen link to play the game."); return; }
   if(!renderer.getContext()){ showFatal("WebGL isn’t available in this view. Tap the full-screen link to play."); return; }
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.5));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.4));
   renderer.setSize(app.clientWidth||window.innerWidth||360,app.clientHeight||window.innerHeight||640);
   renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=0.92;
   renderer.domElement.style.touchAction="none";
-  renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  renderer.shadowMap.enabled=false;
   app.insertBefore(renderer.domElement,app.firstChild);
 
   const scene=new THREE.Scene();scene.background=new THREE.Color(0x05030f);scene.fog=new THREE.Fog(0x070410,140,540);
@@ -4304,9 +4302,9 @@ three/build/three.module.js:
   const station=makeStation();station.position.set(-150,80,-420);station.rotation.z=0.3;scene.add(station);
   const ships=[makeShip(0x00e5ff),makeShip(0xff2bd6),makeShip(0xffe08a)];ships[0].position.set(-120,60,-300);ships[1].position.set(140,90,-360);ships[2].position.set(40,120,-500);ships.forEach(sh=>{sh.rotation.y=Math.PI;scene.add(sh);});
 
-  const groundMat=applyCurve(new THREE.MeshStandardMaterial({map:moonTex.clone(),color:0x7a7e8e,roughness:1}));groundMat.map.needsUpdate=true;groundMat.map.repeat.set(12,44);const ground=new THREE.Mesh(new THREE.PlaneGeometry(700,TRACK_LENGTH+160,10,160),groundMat);ground.rotation.x=-Math.PI/2;ground.position.set(0,-0.02,CAR_Z-TRACK_LENGTH/2+40);ground.receiveShadow=true;scene.add(ground);
-  const road=new THREE.Mesh(new THREE.PlaneGeometry(ROAD_WIDTH,TRACK_LENGTH+160,8,240),applyCurve(new THREE.MeshStandardMaterial({color:0x0c0c1a,roughness:0.5,metalness:0.3,emissive:0x06060f,emissiveIntensity:0.5})));road.rotation.x=-Math.PI/2;road.position.set(0,0.01,CAR_Z-TRACK_LENGTH/2+40);road.receiveShadow=true;scene.add(road);
-  const railGeo=new THREE.BoxGeometry(0.34,0.34,TRACK_LENGTH+160,1,1,240);
+  const groundMat=applyCurve(new THREE.MeshStandardMaterial({map:moonTex.clone(),color:0x7a7e8e,roughness:1}));groundMat.map.needsUpdate=true;groundMat.map.repeat.set(12,44);const ground=new THREE.Mesh(new THREE.PlaneGeometry(700,TRACK_LENGTH+160,8,90),groundMat);ground.rotation.x=-Math.PI/2;ground.position.set(0,-0.02,CAR_Z-TRACK_LENGTH/2+40);ground.receiveShadow=true;scene.add(ground);
+  const road=new THREE.Mesh(new THREE.PlaneGeometry(ROAD_WIDTH,TRACK_LENGTH+160,6,130),applyCurve(new THREE.MeshStandardMaterial({color:0x0c0c1a,roughness:0.5,metalness:0.3,emissive:0x06060f,emissiveIntensity:0.5})));road.rotation.x=-Math.PI/2;road.position.set(0,0.01,CAR_Z-TRACK_LENGTH/2+40);road.receiveShadow=true;scene.add(road);
+  const railGeo=new THREE.BoxGeometry(0.34,0.34,TRACK_LENGTH+160,1,1,130);
   const railL=new THREE.Mesh(railGeo,applyCurve(new THREE.MeshStandardMaterial({color:0x00e5ff,emissive:0x00e5ff,emissiveIntensity:2.6})));railL.position.set(-ROAD_HALF,0.3,road.position.z);scene.add(railL);
   const railR=new THREE.Mesh(railGeo,applyCurve(new THREE.MeshStandardMaterial({color:0xff2bd6,emissive:0xff2bd6,emissiveIntensity:2.6})));railR.position.set(ROAD_HALF,0.3,road.position.z);scene.add(railR);
   const dashMat=applyCurve(new THREE.MeshStandardMaterial({color:0x9fb4ff,emissive:0x6f8bff,emissiveIntensity:1.4}));const dashGeo=new THREE.BoxGeometry(0.3,0.05,3.4);const DASH_COUNT=36,DASH_GAP=(TRACK_LENGTH+50)/DASH_COUNT;const dashes=[];for(let i=0;i<DASH_COUNT;i++){const d=new THREE.Mesh(dashGeo,dashMat);d.position.set(0,0.07,CAR_Z-i*DASH_GAP);scene.add(d);dashes.push(d);}
@@ -4319,8 +4317,8 @@ three/build/three.module.js:
   (function setupFX3(){
     let vt=0,ringCol=0;const zc=road.position.z;
     const wallMat=applyCurve(new THREE.MeshStandardMaterial({color:0x0a1730,metalness:0.9,roughness:0.06,transparent:true,opacity:0.10,side:THREE.DoubleSide,depthWrite:false}));
-    for(const sx of[-1,1]){const w=new THREE.Mesh(new THREE.PlaneGeometry(TRACK_LENGTH+160,8,240,1),wallMat);w.rotation.y=sx*Math.PI/2;w.position.set(sx*(ROAD_HALF+0.8),4,zc);scene.add(w);}
-    const edgeGeo=new THREE.BoxGeometry(0.22,0.22,TRACK_LENGTH+160,1,1,240);
+    for(const sx of[-1,1]){const w=new THREE.Mesh(new THREE.PlaneGeometry(TRACK_LENGTH+160,8,130,1),wallMat);w.rotation.y=sx*Math.PI/2;w.position.set(sx*(ROAD_HALF+0.8),4,zc);scene.add(w);}
+    const edgeGeo=new THREE.BoxGeometry(0.22,0.22,TRACK_LENGTH+160,1,1,130);
     const topL=new THREE.Mesh(edgeGeo,applyCurve(new THREE.MeshStandardMaterial({color:0x00e5ff,emissive:0x00e5ff,emissiveIntensity:1.6})));topL.position.set(-(ROAD_HALF+0.8),8,zc);scene.add(topL);
     const topR=new THREE.Mesh(edgeGeo,applyCurve(new THREE.MeshStandardMaterial({color:0xff2bd6,emissive:0xff2bd6,emissiveIntensity:1.6})));topR.position.set((ROAD_HALF+0.8),8,zc);scene.add(topR);
     const rings=[];const rgeo=new THREE.TorusGeometry(ROAD_HALF-0.6,0.28,10,40);
@@ -4346,7 +4344,7 @@ three/build/three.module.js:
     const COL=[0xbfe0ff,0xffc7ee,0xc9b8ff,0xbafff0];
     if(!camera.parent)scene.add(camera); // so camera-attached motes render
     const motes=[];
-    for(let i=0;i<16;i++){
+    for(let i=0;i<8;i++){
       const m=new THREE.Sprite(new THREE.SpriteMaterial({map:soft,color:COL[i%COL.length],transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false,depthTest:false,fog:false}));
       const depth=6+Math.random()*32;m.scale.setScalar(depth*(0.05+Math.random()*0.1));
       m.userData={bx:(Math.random()*2-1)*depth*0.7,by:(Math.random()*2-1)*depth*0.5,bz:-depth,px:Math.random()*6.28,py:Math.random()*6.28,sp:0.15+Math.random()*0.4,base:0.07+Math.random()*0.18};
@@ -4415,7 +4413,7 @@ three/build/three.module.js:
       vertexShader:"varying vec2 vU;void main(){vU=uv;\n#include <begin_vertex>\n#include <project_vertex>\n}",
       fragmentShader:"varying vec2 vU;uniform float uScroll;void main(){float lane=0.0;lane+=smoothstep(0.014,0.0,abs(vU.x-0.25));lane+=smoothstep(0.014,0.0,abs(vU.x-0.5));lane+=smoothstep(0.014,0.0,abs(vU.x-0.75));float tv=abs(fract(vU.y*22.0-uScroll*0.25)-0.5);float cross=smoothstep(0.46,0.5,1.0-tv*2.0)*0.5;float fade=smoothstep(0.0,0.22,vU.y)*smoothstep(1.0,0.5,vU.y);vec3 c=vec3(0.25,0.75,1.0)*lane+vec3(0.35,0.45,1.0)*cross;gl_FragColor=vec4(c*0.7,(lane*0.55+cross*0.3)*fade);}"}));
     gridMat.fog=false;
-    const grid=new THREE.Mesh(new THREE.PlaneGeometry(ROAD_WIDTH,TRACK_LENGTH+160,1,240),gridMat);grid.rotation.x=-Math.PI/2;grid.position.set(0,0.03,road.position.z);scene.add(grid);
+    const grid=new THREE.Mesh(new THREE.PlaneGeometry(ROAD_WIDTH,TRACK_LENGTH+160,1,130),gridMat);grid.rotation.x=-Math.PI/2;grid.position.set(0,0.03,road.position.z);scene.add(grid);
 
     // (9) pulsing energy center line
     const centerLine=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.04,TRACK_LENGTH+160,1,1,1),applyCurve(new THREE.MeshStandardMaterial({color:0x9fe8ff,emissive:0x33d6ff,emissiveIntensity:2.2})));centerLine.position.set(0,0.08,road.position.z);scene.add(centerLine);
@@ -4459,7 +4457,7 @@ three/build/three.module.js:
       composer=new THREEPP.EffectComposer(renderer);
       composer.addPass(new THREEPP.RenderPass(scene,camera));
       const W=app.clientWidth||360,H=app.clientHeight||640;
-      bloom=new THREEPP.UnrealBloomPass(new THREE.Vector2(W,H),0.34,0.3,0.92);
+      bloom=new THREEPP.UnrealBloomPass(new THREE.Vector2(Math.round(W*0.5),Math.round(H*0.5)),0.34,0.3,0.92);
       composer.addPass(bloom);
       postPass=new THREEPP.ShaderPass({uniforms:{tDiffuse:{value:null},uTime:{value:0},uAberr:{value:0},uVign:{value:0.42},uScan:{value:0.12},uGrain:{value:0.01},uTint:{value:new THREE.Vector3(1,1,1)},uTintMix:{value:0.0}},
         vertexShader:"varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}",
@@ -4467,7 +4465,7 @@ three/build/three.module.js:
       composer.addPass(postPass);
       composer.setSize(W,H);composer.setPixelRatio(renderer.getPixelRatio());
       renderScene=()=>composer.render();
-      resizeVisuals=(w,h)=>{composer.setSize(w,h);composer.setPixelRatio(renderer.getPixelRatio());bloom.setSize(w,h);};
+      resizeVisuals=(w,h)=>{composer.setSize(w,h);composer.setPixelRatio(renderer.getPixelRatio());bloom.setSize(Math.round(w*0.5),Math.round(h*0.5));};
     }
 
     // ================= per-frame visual update =================
@@ -4554,8 +4552,6 @@ three/build/three.module.js:
   (function setupFX2(){
     let vt=0;
     try{const pm=new THREE.PMREMGenerator(renderer);const es=new THREE.Scene();es.add(new THREE.Mesh(new THREE.SphereGeometry(15,10,8),new THREE.MeshBasicMaterial({color:0x0a0620,side:THREE.BackSide})));[[0x00e5ff,6,4,-6],[0xff2bd6,-6,3,6],[0xffe08a,0,9,2],[0x66ffcc,4,-2,7]].forEach(a=>{const p=new THREE.Mesh(new THREE.PlaneGeometry(9,9),new THREE.MeshBasicMaterial({color:a[0]}));p.position.set(a[1],a[2],a[3]);p.lookAt(0,0,0);es.add(p);});scene.environment=pm.fromScene(es,0,0.1,60).texture;}catch(e){}
-    const rimA=new THREE.PointLight(0x00e5ff,2.2,44,2);rimA.position.set(-8,4,CAR_Z+6);scene.add(rimA);
-    const rimB=new THREE.PointLight(0xff2bd6,1.8,44,2);rimB.position.set(8,4,CAR_Z+6);scene.add(rimB);
     scene.add(new THREE.HemisphereLight(0x5566aa,0x120a2a,0.45));
     // pools
     const shock=[];for(let i=0;i<6;i++){const m=new THREE.Mesh(new THREE.TorusGeometry(1,0.14,8,32),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:1,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));m.rotation.x=Math.PI/2;m.visible=false;scene.add(m);shock.push({mesh:m,active:false,t:0,s:1});}
@@ -4575,11 +4571,11 @@ three/build/three.module.js:
     FX2.shockwave=function(x,y,z,s){for(const w of shock){if(w.active)continue;w.active=true;w.t=0;w.s=s||1;w.mesh.visible=true;w.mesh.position.set(x,y,z);w.mesh.scale.setScalar(0.2);w.mesh.material.opacity=1;return;}};
     FX2.debris=function(x,y,z,type){const col=type==="asteroid"?0x8a8f9e:(type==="mine"?0xff5522:0x88e0ff);for(let k=0;k<7;k++){for(const d of debris){if(d.active)continue;d.active=true;d.t=0;d.mesh.visible=true;d.mesh.material.color.setHex(col);d.mesh.position.set(x,y,z);const a=Math.random()*6.28,e=Math.random()*3.14,sp=5+Math.random()*9;d.vx=Math.cos(a)*Math.sin(e)*sp;d.vy=Math.abs(Math.cos(e))*sp+2;d.vz=Math.sin(a)*Math.sin(e)*sp;d.mesh.scale.setScalar(0.6+Math.random());break;}}};
     FX2.smoke=function(x,y,z){for(const s of smoke){if(s.active)continue;s.active=true;s.t=0;s.mesh.visible=true;s.mesh.position.set(x,y,z);s.mesh.scale.setScalar(0.5);s.mesh.material.opacity=0.5;return;}};
-    FX2.hitFX=function(m){if(m.type==="boss"){bossBar.style.opacity="1";const f=document.getElementById("mrbossf");if(f)f.style.width=Math.max(0,m.hp/m.maxhp*100)+"%";}else if(m.maxhp>=6){popup("−1",0x9ff6ff,m.mesh.position.x,m.mesh.position.y+1);}};
+    FX2.hitFX=function(m){if(m.type==="boss"){bossBar.style.opacity="1";const f=document.getElementById("mrbossf");if(f)f.style.width=Math.max(0,m.hp/m.maxhp*100)+"%";}};
     FX2.bossFrame=function(m,dt,playing){if(m.mesh.userData.ring)m.mesh.userData.ring.rotation.z+=dt*1.5;if(m.mesh.userData.core)m.mesh.userData.core.material.emissiveIntensity=2+Math.sin(vt*8);m.mesh.position.y=2.4+Math.sin(vt*1.5)*0.4;m.mesh.position.x=Math.sin(vt*0.6)*(ROAD_HALF-4);if(playing){m.fire-=dt;if(m.fire<=0&&m.mesh.position.z>-160&&m.mesh.position.z<CAR_Z-14){m.fire=0.9;for(let a=-1;a<=1;a++)FX2.enemyShoot(m.mesh.position.x+a*2,m.mesh.position.z,state.carX+a*3);}}};
     FX2.endBoss=function(killed){bossM.active=false;bossM.mesh.visible=false;bossBar.style.opacity="0";nextBoss=state.distance+1500+Math.random()*800;if(killed)banner("BOSS DOWN!","#ffd76a");};
     function activateBoss(){bossM.active=true;bossM.mesh.visible=true;bossM.hp=bossM.maxhp;bossM.mesh.position.set(0,2.4,SPAWN_Z);bossM.fire=1.5;bossBar.style.opacity="1";const f=document.getElementById("mrbossf");if(f)f.style.width="100%";banner("⚠ WARNING","#ff4466");toast("⚠ Mothership incoming — destroy it!","#ff6a8a");}
-    FX2.streak=function(){state.streak=(state.streak||0)+1;state.streakT=1.3;const n=state.streak;let msg=null,col="#ffd76a";if(n===3)msg="TRIPLE KILL";else if(n===5){msg="MEGA KILL";col="#ff8a3a";}else if(n===8){msg="ULTRA KILL";col="#ff2bd6";}else if(n===12){msg="GODLIKE";col="#00e5ff";}if(msg){banner(msg,col);bordT=0.5;slowmo(0.16);}};
+    FX2.streak=function(){state.streak=(state.streak||0)+1;state.streakT=1.3;const n=state.streak;let msg=null,col="#ffd76a";if(n===3)msg="TRIPLE KILL";else if(n===5){msg="MEGA KILL";col="#ff8a3a";}else if(n===8){msg="ULTRA KILL";col="#ff2bd6";}else if(n===12){msg="GODLIKE";col="#00e5ff";}if(msg){banner(msg,col);bordT=0.35;}};
     FX2.clearBolts=function(){ebolts.forEach(e=>{e.active=false;e.mesh.visible=false;});};
     FX2.reset=function(){state.streak=0;state.streakT=0;ebolts.forEach(e=>{e.active=false;e.mesh.visible=false;});shock.forEach(w=>{w.active=false;w.mesh.visible=false;});debris.forEach(d=>{d.active=false;d.mesh.visible=false;});smoke.forEach(s=>{s.active=false;s.mesh.visible=false;});bossM.active=false;bossM.mesh.visible=false;bossBar.style.opacity="0";nextBoss=state.distance+1400;};
     FX2.update=function(dt,edt){
@@ -4637,12 +4633,12 @@ three/build/three.module.js:
   function gainCombo(){state.combo++;state.comboT=2.6;state.mult=Math.min(8,1+Math.floor(state.combo/4));if(state.combo>state.maxCombo)state.maxCombo=state.combo;audio.combo(state.combo);missionEvent("combo",state.mult);}
   function breakCombo(){if(state.combo>2)popup("COMBO LOST",0x8892b0,car.position.x,0.62);state.combo=0;state.mult=1;}
   function checkRecord(){if(!state.recordShown&&meta.best>0&&state.scoreVal>meta.best){state.recordShown=true;banner("NEW RECORD!","#ffd76a");audio.record();el.recFlash.style.transition="none";el.recFlash.style.opacity="1";setTimeout(()=>{el.recFlash.style.transition="opacity 1.2s";el.recFlash.style.opacity="0";},40);}}
-  function shake(a){state.shake=Math.min(1.4,state.shake+a);}
+  function shake(a){state.shake=Math.min(0.7,state.shake+a);}
   function hitstop(t){state.hitstop=Math.max(state.hitstop,t);}
   function slowmo(t){state.slowmo=Math.max(state.slowmo,t);}
   // DOM popups/toasts/banner
   function worldToScreen(x,y,z){const v=new THREE.Vector3(x,y,z).project(camera);return{sx:(v.x*0.5+0.5)*app.clientWidth,sy:(-v.y*0.5+0.5)*app.clientHeight};}
-  function popup(text,colorHex,worldX,worldY){const p=worldToScreen(worldX!=null?worldX:0,worldY!=null?worldY:1.4,CAR_Z-1);const d=document.createElement("div");d.className="pop";d.textContent=text;d.style.left=p.sx+"px";d.style.top=p.sy+"px";d.style.color="#"+("000000"+(colorHex||0xffffff).toString(16)).slice(-6);d.style.fontSize=(text.length>6?18:24)+"px";el.popups.appendChild(d);setTimeout(()=>d.remove(),900);}
+  function popup(text,colorHex,worldX,worldY){const p=worldToScreen(worldX!=null?worldX:0,worldY!=null?worldY:1.4,CAR_Z-1);const d=document.createElement("div");d.className="pop";d.textContent=text;d.style.left=p.sx+"px";d.style.top=(p.sy-34)+"px";d.style.color="#"+("000000"+(colorHex||0xffffff).toString(16)).slice(-6);d.style.fontSize=(text.length>6?12:15)+"px";d.style.opacity="0.9";el.popups.appendChild(d);setTimeout(()=>d.remove(),900);}
   function toast(text,color){const d=document.createElement("div");d.className="toast glass";d.textContent=text;d.style.color=color||"#fff";el.toasts.appendChild(d);setTimeout(()=>d.remove(),2100);}
   function banner(text,color){el.banner.textContent=text;el.banner.style.color=color||"#fff";el.banner.classList.remove("show");void el.banner.offsetWidth;el.banner.classList.add("show");}
 
@@ -4700,7 +4696,7 @@ three/build/three.module.js:
     if(state.phase!=="playing"||state.bombs<=0)return;
     state.bombs--;updateBombUI();
     el.recFlash.style.transition="none";el.recFlash.style.opacity="1";setTimeout(()=>{el.recFlash.style.transition="opacity .6s";el.recFlash.style.opacity="0";},30);
-    shake(1.5);hitstop(0.08);slowmo(0.28);audio.boom();FX2.shockwave(car.position.x,1.6,CAR_Z-6,4.2);
+    shake(0.5);slowmo(0.12);audio.boom();FX2.shockwave(car.position.x,1.6,CAR_Z-6,4.2);
     if(FX2.clearBolts)FX2.clearBolts();
     for(const m of movers){if(!m.active)continue;if(m.type==="boss"){m.hp-=10;FX2.hitFX(m);if(m.hp<=0)killUfo(m,0,false);}else if(m.destructible&&m.mesh.position.z>SPAWN_Z+30&&m.mesh.position.z<CAR_Z+8){killUfo(m,0,false);}}
     toast("💣 BOMB!","#ffd76a");
@@ -4830,10 +4826,10 @@ three/build/three.module.js:
         const dz=Math.abs(m.mesh.position.z-CAR_Z), dx=Math.abs(m.mesh.position.x-s.carX);
         if(dz<hitZ&&dx<collideDist(m.half)){
           if(m.kind==="orb"){m.active=false;m.mesh.visible=false;const pts=addScore(60);gainCombo();s.orbCount++;popup("+"+pts,0x66ffcc,m.mesh.position.x);audio.coin();missionEvent("orb");}
-          else if(s.shield>0){s.shield=0;spawnExplosion(m.mesh.position.x,m.mesh.position.y,m.mesh.position.z,1.4);shake(1.0);hitstop(0.06);toast("🛡️ Shield saved you!","#66ccff");if(m.type!=="boss")spawnFront(m);}
+          else if(s.shield>0){s.shield=0;spawnExplosion(m.mesh.position.x,m.mesh.position.y,m.mesh.position.z,1.4);shake(0.35);toast("🛡️ Shield saved you!","#66ccff");if(m.type!=="boss")spawnFront(m);}
           else{endGame();}
         } else if(m.destructible&&m.type!=="boss"&&!m.nm&&dz<hitZ&&dx<collideDist(m.half)+1.9){
-          m.nm=true;const pts=addScore(40);gainCombo();popup("CLOSE! +"+pts,0xffe08a,m.mesh.position.x,1.8);slowmo(0.3);audio.nearmiss();missionEvent("near");shake(0.28);
+          m.nm=true;const pts=addScore(40);gainCombo();popup("CLOSE! +"+pts,0xffe08a,m.mesh.position.x,1.8);audio.nearmiss();missionEvent("near");shake(0.08);
         }
       }
       // magnet: pull orbs & pickups toward car x
@@ -4850,8 +4846,8 @@ three/build/three.module.js:
 
       // camera + shake
       s.camX+=(s.carX*0.4-s.camX)*Math.min(1,dt*4);
-      s.shake*=Math.pow(0.001,dt);if(s.shake<0.01)s.shake=0;const sh=s.shake;
-      const _sp=(s.speed-BASE_SPEED)/(MAX_SPEED-BASE_SPEED);const carS=CAR_Z+curve.uTravel.value;const carH=hillAt(carS),carB=bendAt(carS);camera.position.set(s.camX+carB+(Math.random()-0.5)*sh*0.5, 5.3+carH-s.boostVis*0.35-(s.beat||0)*0.16+(Math.random()-0.5)*sh*0.4, CAR_Z+CAM_BACK-_sp*1.0+s.boostVis*0.4);
+      s.shake*=Math.pow(0.0002,dt);if(s.shake<0.01)s.shake=0;const sh=s.shake;
+      const _sp=(s.speed-BASE_SPEED)/(MAX_SPEED-BASE_SPEED);const carS=CAR_Z+curve.uTravel.value;const carH=hillAt(carS),carB=bendAt(carS);camera.position.set(s.camX+carB+(Math.random()-0.5)*sh*0.22, 5.3+carH-s.boostVis*0.3-(s.beat||0)*0.12+(Math.random()-0.5)*sh*0.18, CAR_Z+CAM_BACK-_sp*1.0+s.boostVis*0.4);
       const aS=carS-16;camera.lookAt(s.carX*0.3+bendAt(aS),1.5+hillAt(aS),CAR_Z-22);camera.rotateZ((bendAt(carS-6)-carB)*-0.045+(s.vx/38)*0.045);
       audio.setEngineIntensity((s.speed-BASE_SPEED)/(MAX_SPEED-BASE_SPEED));
       addXp();
@@ -4880,7 +4876,7 @@ three/build/three.module.js:
     spawnExplosion(x,y,z,big?2.8:(type==="asteroid"?1.6:(byMissile?1.5:1.1)));
     FX2.shockwave(x,y,z,big?3.2:(type==="asteroid"?1.4:1));FX2.debris(x,y,z,type);FX2.smoke(x,y,z);FX2.streak();
     state.kills++;gainCombo();dropLoot(x,z);audio.boom();
-    shake(big?1.6:(byMissile?0.8:0.55));hitstop(big?0.1:0.05);
+    shake(big?0.5:0.16);if(big)hitstop(0.05);
     
     popup((byMissile?"💥 ":"")+"+"+pts,byMissile?0xff6ae0:(big?0xffd76a:0xffffff),x,2.4);
     missionEvent("kill");if(byMissile)missionEvent("missile");
