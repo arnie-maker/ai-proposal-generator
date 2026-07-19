@@ -64,6 +64,9 @@
 
   @media (hover:hover) and (pointer:fine) and (min-width:900px) { .actions, .wheel { display:none; } }
 
+  /* peripheral motion blur that ramps in at high speed */
+  .speedblur { position:absolute; inset:0; pointer-events:none; opacity:0; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+    -webkit-mask-image:radial-gradient(ellipse 60% 50% at 50% 46%, transparent 52%, #000 90%); mask-image:radial-gradient(ellipse 60% 50% at 50% 46%, transparent 52%, #000 90%); transition:opacity .12s linear; }
   .boost-flash { position:absolute; inset:0; pointer-events:none; opacity:0; background:radial-gradient(ellipse at 50% 120%, rgba(0,229,255,0.18), transparent 62%); transition:opacity .2s ease; }
   .hurt-flash { position:absolute; inset:0; pointer-events:none; opacity:0; box-shadow:inset 0 0 120px rgba(255,40,70,0.6); transition:opacity .3s ease; }
 
@@ -93,6 +96,7 @@
 <body>
 <div id="app">
   <div class="vignette"></div>
+  <div class="speedblur" id="speedBlur"></div>
   <div class="boost-flash" id="boostFlash"></div>
   <div class="hurt-flash" id="hurtFlash"></div>
 
@@ -4125,9 +4129,9 @@ three/build/three.module.js:
 
   /* ============================ CONSTANTS ============================ */
   const WORLD_R=210;                 // drivable radius
-  const CRUISE=34, MAXSPD=82, REVSPD=-18, ACCEL=46, DRAG=0.7, TURN=1.9;
-  const CAM_DIST=13, CAM_H=6.2, LOOK_AHEAD=11;
-  const BOLT_SPEED=150, FIRE_INTERVAL=0.12;
+  const CRUISE=64, MAXSPD=140, REVSPD=-30, ACCEL=120, DRAG=0.7, TURN=2.4;
+  const CAM_DIST=10.5, CAM_H=4.7, LOOK_AHEAD=16;
+  const BOLT_SPEED=210, FIRE_INTERVAL=0.11;
   const SKINS=[{id:"aurora",a:0x00e5ff,b:0xff2bd6}];
   // curvature is meaningless in free-roam — neutralise the shader hook the models use
   function applyCurve(mat){return mat;}
@@ -4186,7 +4190,7 @@ three/build/three.module.js:
   const meta={best:parseInt(LS.get("best","0"),10)||0,coins:parseInt(LS.get("coins","0"),10)||0};
 
   const el={score:$("score"),kills:$("kills"),best:$("best"),coinHud:$("coinHud"),hearts:$("hearts"),soundBtn:$("soundBtn"),
-    spVal:$("spVal"),spFill:$("spFill"),boostFlash:$("boostFlash"),hurtFlash:$("hurtFlash"),popups:$("popups"),toasts:$("toasts"),
+    spVal:$("spVal"),spFill:$("spFill"),boostFlash:$("boostFlash"),hurtFlash:$("hurtFlash"),speedBlur:$("speedBlur"),popups:$("popups"),toasts:$("toasts"),
     overlay:$("overlay"),card:$("card"),fireBtn:$("fireBtn"),brakeBtn:$("brakeBtn"),boostBtn:$("boostBtn"),wheel:$("wheel"),wheelKnob:$("wheelKnob"),
     miniCv:$("miniCv")};
   el.best.textContent=meta.best.toLocaleString();el.coinHud.textContent="💰 "+meta.coins.toLocaleString();
@@ -4224,7 +4228,7 @@ three/build/three.module.js:
 
   /* ============================ WORLD BUILD — MOON BASE ============================ */
   const obstacles=[]; // {x,z,r} for collision
-  const BLOCK=60, ROADW=15, GRID=3;                 // road grid: lines at k*BLOCK, k=-3..3
+  const BLOCK=60, ROADW=19, GRID=3;                 // road grid: lines at k*BLOCK, k=-3..3
   const ACCENT=[0x00e5ff,0xffb43a,0x66ffcc,0xff5a7a];
   let wseed=1234;const wr=()=>{wseed=(wseed*1103515245+12345)&0x7fffffff;return wseed/0x7fffffff;};
   const steelMat=()=>new THREE.MeshStandardMaterial({color:0x2a2f3e,metalness:0.8,roughness:0.42,emissive:0x0a0e18,emissiveIntensity:0.35});
@@ -4451,8 +4455,8 @@ three/build/three.module.js:
       if(state.boostBank>0){state.boostBank=Math.max(0,state.boostBank-dt);boosting=true;}
       const braking=state.braking||keys.has("arrowdown")||keys.has("s");
       let target=braking?REVSPD:(boosting?MAXSPD:CRUISE);
-      const rate=braking?ACCEL*1.4:ACCEL;
-      state.speed+=(target-state.speed)*Math.min(1,dt*(rate/40));
+      const rate=braking?ACCEL*1.5:ACCEL;
+      state.speed+=(target-state.speed)*Math.min(1,dt*(rate/24));   // punchy — takes off fast
       // ---- steering ----
       let steer=state.steer;if(keys.has("arrowleft")||keys.has("a"))steer-=1;if(keys.has("arrowright")||keys.has("d"))steer+=1;steer=Math.max(-1,Math.min(1,steer));
       const grip=Math.min(1,Math.abs(state.speed)/18);state.hd-=steer*TURN*dt*grip*Math.sign(state.speed||1);
@@ -4472,10 +4476,12 @@ three/build/three.module.js:
       if(carParts.muzzleGlow)carParts.muzzleGlow.forEach(m=>m.material.emissiveIntensity*=Math.pow(0.001,dt));
       // ---- HUD speed ----
       const spN=Math.min(1,Math.abs(state.speed)/MAXSPD);
-      const kmh=Math.round(Math.abs(state.speed)*3.4);el.spVal.textContent=kmh;el.spFill.style.width=(spN*100)+"%";
+      const kmh=Math.round(Math.abs(state.speed)*2.2);el.spVal.textContent=kmh;el.spFill.style.width=(spN*100)+"%";
       audio.setEngineIntensity(spN);
-      // ---- speed lines (racing rush when accelerating) ----
-      speedLineFrame(dt);const fastRush=boosting||spN>0.34;slTimer-=dt;if(fastRush&&slTimer<=0){slTimer=Math.max(0.03,0.06-spN*0.03);emitSpeedLines(spN,boosting);}
+      // ---- speed lines (racing rush — on almost whenever you're moving) ----
+      speedLineFrame(dt);const fastRush=boosting||spN>0.13;slTimer-=dt;if(fastRush&&slTimer<=0){slTimer=Math.max(0.024,0.055-spN*0.035);emitSpeedLines(spN,boosting);}
+      // ---- high-speed motion blur (peripheral) ----
+      const blurN=Math.max(0,(spN-0.28)/0.72);el.speedBlur.style.opacity=(blurN*(boosting?1:0.85)).toFixed(2);
       if(state.invuln>0)state.invuln-=dt;
       if(state.hurtT>0){state.hurtT-=dt;el.hurtFlash.style.opacity=(state.hurtT).toFixed(2);}else el.hurtFlash.style.opacity="0";
 
@@ -4515,11 +4521,12 @@ three/build/three.module.js:
       camera.position.z+=(desiredZ-camera.position.z)*lerp+(Math.random()-0.5)*sh*0.5;
       camera.position.y+=((CAM_H-state.boostVis*0.5)-camera.position.y)*lerp+(Math.random()-0.5)*sh*0.35;
       camera.lookAt(state.x+cf.x*LOOK_AHEAD,1.6,state.z+cf.z*LOOK_AHEAD);
-      camFov+=((66+state.boostVis*20+spN*10)-camFov)*Math.min(1,dt*4);camera.fov=camFov;camera.updateProjectionMatrix();
+      camFov+=((72+state.boostVis*22+spN*16)-camFov)*Math.min(1,dt*4);camera.fov=camFov;camera.updateProjectionMatrix();
 
       miniAcc+=dt;if(miniAcc>0.08){miniAcc=0;drawMinimap();}
     } else {
       // idle: slow orbit camera around the plaza
+      if(el.speedBlur.style.opacity!=="0")el.speedBlur.style.opacity="0";
       const a=time*0.12;camera.position.set(Math.sin(a)*26,10,Math.cos(a)*26);camera.lookAt(0,2,0);camera.fov=62;camera.updateProjectionMatrix();
       car.position.set(0,0,0);car.rotation.y=a*2;
       for(const p of pickups){if(!p.active)continue;p.gem.rotation.y+=dt*2;p.gem.position.y=1.4+Math.sin(time*3+p.ph)*0.18;}
