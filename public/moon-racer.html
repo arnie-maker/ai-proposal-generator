@@ -4222,44 +4222,72 @@ three/build/three.module.js:
   const moonBody=new THREE.Mesh(new THREE.SphereGeometry(120,32,24),new THREE.MeshStandardMaterial({map:moonTex.clone(),color:0x8a8f9e,emissive:0x223,emissiveIntensity:0.3,roughness:1}));moonBody.position.set(-360,220,-620);scene.add(moonBody);
   const planet=new THREE.Mesh(new THREE.SphereGeometry(80,32,24),new THREE.MeshStandardMaterial({color:0xff5a7a,emissive:0x551122,emissiveIntensity:0.4,roughness:0.7}));planet.position.set(480,260,-560);scene.add(planet);const pring=new THREE.Mesh(new THREE.TorusGeometry(130,10,10,60),new THREE.MeshBasicMaterial({color:0xff9db4,transparent:true,opacity:0.5,fog:false}));pring.position.copy(planet.position);pring.rotation.set(1.2,0.3,0);scene.add(pring);
 
-  /* ============================ WORLD BUILD ============================ */
+  /* ============================ WORLD BUILD — MOON BASE ============================ */
   const obstacles=[]; // {x,z,r} for collision
-  const cityColors=[0x00e5ff,0xff2bd6,0x8b5cf6,0x66ffcc,0xffd76a];
-  function makeBuilding(w,h,d,col){const g=new THREE.Group();const body=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color:0x111426,metalness:0.7,roughness:0.35,emissive:0x05060f,emissiveIntensity:0.5}));body.position.y=h/2;g.add(body);
-    // emissive edge crown
-    const crown=new THREE.Mesh(new THREE.BoxGeometry(w*1.02,0.4,d*1.02),new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:2.2}));crown.position.y=h;g.add(crown);
-    // window strips
-    for(let s=-1;s<=1;s+=2){const strip=new THREE.Mesh(new THREE.BoxGeometry(0.12,h*0.8,d*0.72),new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:1.4,transparent:true,opacity:0.85}));strip.position.set(s*w*0.5,h*0.5,0);g.add(strip);}
-    const base=new THREE.Mesh(new THREE.BoxGeometry(w*1.15,0.5,d*1.15),new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:1.2}));base.position.y=0.25;g.add(base);
-    return g;}
-  // scatter buildings on a jittered grid, leaving a central plaza clear
-  (function(){let seed=1234;const rnd=()=>{seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff;};
-    const step=46;
-    for(let gx=-4;gx<=4;gx++)for(let gz=-4;gz<=4;gz++){
-      const bx=gx*step+(rnd()-0.5)*16, bz=gz*step+(rnd()-0.5)*16;const d0=Math.hypot(bx,bz);
-      if(d0<34) continue;                        // clear plaza around spawn
-      if(d0>WORLD_R-20) continue;                // inside boundary
-      if(rnd()<0.28) continue;                    // some empty lots
-      const w=8+rnd()*10, d=8+rnd()*10, h=10+rnd()*46;const col=cityColors[(Math.floor(rnd()*cityColors.length))];
-      const b=makeBuilding(w,h,d,col);b.position.set(bx,0,bz);b.rotation.y=rnd()*Math.PI;scene.add(b);
-      obstacles.push({x:bx,z:bz,r:Math.max(w,d)*0.62});
+  const BLOCK=60, ROADW=15, GRID=3;                 // road grid: lines at k*BLOCK, k=-3..3
+  const ACCENT=[0x00e5ff,0xffb43a,0x66ffcc,0xff5a7a];
+  let wseed=1234;const wr=()=>{wseed=(wseed*1103515245+12345)&0x7fffffff;return wseed/0x7fffffff;};
+  const steelMat=()=>new THREE.MeshStandardMaterial({color:0x2a2f3e,metalness:0.8,roughness:0.42,emissive:0x0a0e18,emissiveIntensity:0.35});
+  const darkMat=()=>new THREE.MeshStandardMaterial({color:0x14161f,metalness:0.7,roughness:0.5,emissive:0x060810,emissiveIntensity:0.4});
+
+  // --- road network: textured asphalt strips with edge lines + centre dashes ---
+  const roadTex=(function(){const c=document.createElement("canvas");c.width=64;c.height=128;const x=c.getContext("2d");x.fillStyle="#15171f";x.fillRect(0,0,64,128);for(let i=0;i<400;i++){const g=20+Math.random()*20;x.fillStyle="rgba("+g+","+g+","+(g+6)+",0.4)";x.fillRect(Math.random()*64,Math.random()*128,1,1);}x.strokeStyle="rgba(0,229,255,0.9)";x.lineWidth=2.4;x.beginPath();x.moveTo(4,0);x.lineTo(4,128);x.moveTo(60,0);x.lineTo(60,128);x.stroke();x.fillStyle="rgba(255,190,80,0.95)";x.fillRect(30,14,4,52);const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;})();
+  const ROAD_TILE=26;
+  function addRoad(along,k){const len=2*WORLD_R;const tex=roadTex.clone();tex.needsUpdate=true;tex.repeat.set(1,len/ROAD_TILE);const m=new THREE.Mesh(new THREE.PlaneGeometry(ROADW,len),new THREE.MeshStandardMaterial({map:tex,color:0xffffff,roughness:0.85,metalness:0.1,emissive:0x0b1018,emissiveIntensity:0.6}));m.rotation.x=-Math.PI/2;const grp=new THREE.Group();grp.add(m);if(along==="z"){grp.position.set(k*BLOCK,0.05,0);}else{grp.rotation.y=Math.PI/2;grp.position.set(0,0.05,k*BLOCK);}scene.add(grp);}
+  for(let k=-GRID;k<=GRID;k++){addRoad("z",k);addRoad("x",k);}
+  // intersection pads (glowing crosswalk squares)
+  for(let a=-GRID;a<=GRID;a++)for(let b=-GRID;b<=GRID;b++){const m=new THREE.Mesh(new THREE.PlaneGeometry(ROADW,ROADW),new THREE.MeshBasicMaterial({color:0x0a2233,transparent:true,opacity:0.6}));m.rotation.x=-Math.PI/2;m.position.set(a*BLOCK,0.055,b*BLOCK);scene.add(m);}
+
+  // --- base structure builders ---
+  function makeDome(r,col){const g=new THREE.Group();const dome=new THREE.Mesh(new THREE.SphereGeometry(r,20,14,0,Math.PI*2,0,Math.PI/2),new THREE.MeshStandardMaterial({color:0x8fbfe0,metalness:0.4,roughness:0.15,transparent:true,opacity:0.32,emissive:0x1c4a66,emissiveIntensity:0.5,side:THREE.DoubleSide}));g.add(dome);
+    const frame=new THREE.Mesh(new THREE.SphereGeometry(r*1.005,12,7,0,Math.PI*2,0,Math.PI/2),new THREE.MeshBasicMaterial({color:col,wireframe:true,transparent:true,opacity:0.5,fog:true}));g.add(frame);
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(r,0.4,8,28),new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:2.2}));ring.rotation.x=Math.PI/2;ring.position.y=0.3;g.add(ring);
+    const base=new THREE.Mesh(new THREE.CylinderGeometry(r*0.98,r*1.05,1.2,24),steelMat());base.position.y=0.6;g.add(base);
+    const door=new THREE.Mesh(new THREE.BoxGeometry(3,2.4,0.4),new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:1.6}));door.position.set(0,1.4,r*0.98);g.add(door);
+    const lamp=new THREE.PointLight(col,3,r*3,2);lamp.position.y=r*0.7;g.add(lamp);return g;}
+  function makeBaseBlock(w,h,d,col){const g=new THREE.Group();const body=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),darkMat());body.position.y=h/2;g.add(body);
+    const foot=new THREE.Mesh(new THREE.BoxGeometry(w*1.12,0.6,d*1.12),new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:1.4}));foot.position.y=0.3;g.add(foot);
+    // window rows (emissive strips)
+    for(let ry=1;ry<Math.floor(h/3);ry++){for(const sgn of[-1,1]){const win=new THREE.Mesh(new THREE.BoxGeometry(w*0.82,0.5,0.1),new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:1.5,transparent:true,opacity:0.9}));win.position.set(0,ry*3,sgn*d*0.5);g.add(win);}}
+    const roof=new THREE.Mesh(new THREE.BoxGeometry(w*0.5,1.2,d*0.5),steelMat());roof.position.y=h+0.6;g.add(roof);
+    const ant=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,3,6),steelMat());ant.position.set(w*0.3,h+2,d*0.2);g.add(ant);const antl=new THREE.Mesh(new THREE.SphereGeometry(0.25,8,6),new THREE.MeshStandardMaterial({color:0xff4455,emissive:0xff2233,emissiveIntensity:2.4}));antl.position.set(w*0.3,h+3.5,d*0.2);g.add(antl);return g;}
+  function makeTower(h,col){const g=new THREE.Group();const mast=new THREE.Mesh(new THREE.CylinderGeometry(0.9,2.2,h,8),steelMat());mast.position.y=h/2;g.add(mast);for(let i=1;i<=3;i++){const pl=new THREE.Mesh(new THREE.CylinderGeometry(2.2,2.2,0.5,10),new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:1.6}));pl.position.y=h*i/4;g.add(pl);}const dish=new THREE.Mesh(new THREE.SphereGeometry(2.4,14,8,0,Math.PI*2,0,Math.PI/2),new THREE.MeshStandardMaterial({color:0xcfd6ea,metalness:0.7,roughness:0.3}));dish.rotation.x=-1.1;dish.position.set(1.5,h*0.8,0);g.add(dish);const top=new THREE.Mesh(new THREE.SphereGeometry(0.5,8,6),new THREE.MeshStandardMaterial({color:0xff4455,emissive:0xff2233,emissiveIntensity:2.6}));top.position.y=h+0.6;g.add(top);return g;}
+  function makeTanks(col){const g=new THREE.Group();const n=2+Math.floor(wr()*2);for(let i=0;i<n;i++){const r=2+wr()*1.2,h=5+wr()*4;const t=new THREE.Group();const body=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,16),new THREE.MeshStandardMaterial({color:0xb8bfd0,metalness:0.7,roughness:0.4}));body.position.y=h/2;t.add(body);const cap=new THREE.Mesh(new THREE.SphereGeometry(r,16,8,0,Math.PI*2,0,Math.PI/2),new THREE.MeshStandardMaterial({color:0xcfd6ea,metalness:0.7,roughness:0.3}));cap.position.y=h;t.add(cap);const band=new THREE.Mesh(new THREE.TorusGeometry(r*1.01,0.16,6,20),new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:1.8}));band.rotation.x=Math.PI/2;band.position.y=h*0.6;t.add(band);t.position.set((i-(n-1)/2)*(r*2.4),0,(wr()-0.5)*3);g.add(t);}return g;}
+  function makeSolar(){const g=new THREE.Group();const post=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,2.4,6),steelMat());post.position.y=1.2;g.add(post);const panel=new THREE.Mesh(new THREE.BoxGeometry(9,0.2,5),new THREE.MeshStandardMaterial({color:0x0a1a3a,metalness:0.5,roughness:0.3,emissive:0x14306a,emissiveIntensity:0.9}));panel.position.y=2.6;panel.rotation.x=-0.5;g.add(panel);for(let i=-1;i<=1;i++){const line=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.22,5),new THREE.MeshStandardMaterial({color:0x3a7bff,emissive:0x3a7bff,emissiveIntensity:1.4}));line.position.set(i*3,2.62,0);line.rotation.x=-0.5;g.add(line);}return g;}
+  function makeHangar(w,h,d){const g=new THREE.Group();const body=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),steelMat());body.position.y=h/2;g.add(body);const roof=new THREE.Mesh(new THREE.CylinderGeometry(w/2,w/2,d,18,1,false,0,Math.PI),new THREE.MeshStandardMaterial({color:0x333a4d,metalness:0.7,roughness:0.4}));roof.rotation.z=Math.PI/2;roof.rotation.y=Math.PI/2;roof.position.y=h;g.add(roof);const door=new THREE.Mesh(new THREE.BoxGeometry(w*0.7,h*0.8,0.4),new THREE.MeshStandardMaterial({color:0x00e5ff,emissive:0x00e5ff,emissiveIntensity:1.4,transparent:true,opacity:0.85}));door.position.set(0,h*0.4,d*0.5);g.add(door);const stripe=new THREE.Mesh(new THREE.BoxGeometry(w*1.02,0.4,d*1.02),new THREE.MeshStandardMaterial({color:0xffb43a,emissive:0xffb43a,emissiveIntensity:1.6}));stripe.position.y=0.2;g.add(stripe);return g;}
+  function makePad(r,parked){const g=new THREE.Group();const disc=new THREE.Mesh(new THREE.CylinderGeometry(r,r,0.2,28),new THREE.MeshStandardMaterial({color:0x1b1f2c,metalness:0.6,roughness:0.6,emissive:0x0a0e18,emissiveIntensity:0.4}));disc.position.y=0.08;g.add(disc);const ring=new THREE.Mesh(new THREE.TorusGeometry(r*0.86,0.18,8,32),new THREE.MeshBasicMaterial({color:0xffb43a,fog:true}));ring.rotation.x=Math.PI/2;ring.position.y=0.16;g.add(ring);for(const seg of[[0,0.5,3,0.6],[0,-0.5,3,0.6],[0,0,0.6,1.6]]){const bar=new THREE.Mesh(new THREE.BoxGeometry(seg[2],0.06,seg[3]),new THREE.MeshBasicMaterial({color:0x00e5ff,fog:true}));bar.position.set(seg[0],0.18,seg[1]);g.add(bar);}for(let i=0;i<6;i++){const a=i/6*Math.PI*2;const l=new THREE.Mesh(new THREE.SphereGeometry(0.22,8,6),new THREE.MeshBasicMaterial({color:0x66ffcc,fog:false}));l.position.set(Math.cos(a)*r*0.95,0.25,Math.sin(a)*r*0.95);g.add(l);}if(parked){const s=makeShipSmall();s.position.set(0,0.3,0);s.scale.setScalar(0.9);g.add(s);}return g;}
+  function makeShipSmall(){const g=new THREE.Group();const body=new THREE.Mesh(new THREE.ConeGeometry(1,4,7),new THREE.MeshStandardMaterial({color:0xc4ccdf,metalness:0.9,roughness:0.25}));body.rotation.x=Math.PI/2;body.position.y=1.4;g.add(body);for(const sx of[-1,1]){const leg=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.12,1.6,6),steelMat());leg.position.set(sx*0.9,0.7,0.6);leg.rotation.z=sx*0.3;g.add(leg);}const gl=new THREE.Mesh(new THREE.SphereGeometry(0.4,10,8),new THREE.MeshStandardMaterial({color:0x00e5ff,emissive:0x00e5ff,emissiveIntensity:2}));gl.position.set(0,0.5,1.6);g.add(gl);return g;}
+
+  // --- lay out structures in the blocks between roads ---
+  (function(){
+    for(let i=-GRID;i<GRID;i++)for(let j=-GRID;j<GRID;j++){
+      const cx=(i+0.5)*BLOCK+(wr()-0.5)*10, cz=(j+0.5)*BLOCK+(wr()-0.5)*10;const d0=Math.hypot(cx,cz);
+      if(d0<44) continue;                              // keep central plaza clear
+      if(wr()<0.12) continue;                           // occasional empty lot / yard
+      const col=ACCENT[Math.floor(wr()*ACCENT.length)];const t=wr();let s,rad;
+      if(t<0.26){const r=8+wr()*4;s=makeDome(r,col);rad=r;}
+      else if(t<0.52){const w=10+wr()*8,h=12+wr()*30,d=10+wr()*8;s=makeBaseBlock(w,h,d,col);rad=Math.max(w,d)*0.6;}
+      else if(t<0.66){s=makeTower(24+wr()*22,col);rad=3;}
+      else if(t<0.78){s=makeTanks(col);rad=6;}
+      else if(t<0.88){s=makeSolar();rad=5;s.rotation.y=wr()*Math.PI;}
+      else if(t<0.96){const w=14+wr()*6,h=9+wr()*3,d=18+wr()*8;s=makeHangar(w,h,d);rad=Math.max(w,d)*0.55;}
+      else {s=makePad(7+wr()*3,wr()<0.6);rad=0;}         // pads are drive-on (no collision)
+      s.position.set(cx,0,cz);if(s.rotation.y===0)s.rotation.y=Math.floor(wr()*4)*Math.PI/2;scene.add(s);
+      if(rad>0)obstacles.push({x:cx,z:cz,r:rad});
     }
-    // scattered rocks / crystals
-    for(let i=0;i<40;i++){const a=rnd()*Math.PI*2,r=40+rnd()*(WORLD_R-50),rx=Math.cos(a)*r,rz=Math.sin(a)*r;const isCry=rnd()<0.4;
-      const m=isCry?new THREE.Mesh(new THREE.ConeGeometry(1+rnd()*1.5,4+rnd()*5,5),new THREE.MeshStandardMaterial({color:0xb060ff,emissive:0x6a2aff,emissiveIntensity:1.4,transparent:true,opacity:0.9})):new THREE.Mesh(new THREE.DodecahedronGeometry(1.4+rnd()*2.4,0),new THREE.MeshStandardMaterial({color:0x8a8f9e,roughness:1,metalness:0.1,flatShading:true}));
-      m.position.set(rx,isCry?2:1,rz);m.rotation.set(rnd()*3,rnd()*3,rnd()*3);scene.add(m);obstacles.push({x:rx,z:rz,r:1.8});}
+    // lunar surface outside the base: craters + rocks in the outer ring
+    for(let i=0;i<46;i++){const a=wr()*Math.PI*2,r=185+wr()*(WORLD_R-190),rx=Math.cos(a)*r,rz=Math.sin(a)*r;
+      const rock=new THREE.Mesh(new THREE.DodecahedronGeometry(1.6+wr()*3,0),new THREE.MeshStandardMaterial({color:0x8a8f9e,roughness:1,metalness:0.1,flatShading:true}));rock.position.set(rx,1,rz);rock.rotation.set(wr()*3,wr()*3,wr()*3);scene.add(rock);obstacles.push({x:rx,z:rz,r:2});}
   })();
-  // glowing road grid on the ground (visual reference for driving)
-  (function(){const roadMat=new THREE.MeshBasicMaterial({color:0x1a3a5a,transparent:true,opacity:0.5,fog:true});
-    for(let i=-4;i<=4;i++){const h=new THREE.Mesh(new THREE.PlaneGeometry(WORLD_R*2,3),roadMat);h.rotation.x=-Math.PI/2;h.position.set(0,0.02,i*46);scene.add(h);const v=new THREE.Mesh(new THREE.PlaneGeometry(3,WORLD_R*2),roadMat);v.rotation.x=-Math.PI/2;v.position.set(i*46,0.02,0);scene.add(v);}
-    // central plaza ring
-    const ring=new THREE.Mesh(new THREE.RingGeometry(30,32,64),new THREE.MeshBasicMaterial({color:0x00e5ff,transparent:true,opacity:0.6,side:THREE.DoubleSide,fog:true}));ring.rotation.x=-Math.PI/2;ring.position.y=0.03;scene.add(ring);
-  })();
-  // boundary — ring of neon pylons + faint force wall
-  (function(){const pyl=new THREE.CylinderGeometry(0.5,0.7,12,8);for(let i=0;i<60;i++){const a=i/60*Math.PI*2;const col=i%2?0x00e5ff:0xff2bd6;const p=new THREE.Mesh(pyl,new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:2}));p.position.set(Math.cos(a)*WORLD_R,6,Math.sin(a)*WORLD_R);scene.add(p);}
+
+  // central landing plaza: pads around the beacon
+  for(let i=0;i<4;i++){const a=i/4*Math.PI*2;const pad=makePad(6,i<2);pad.position.set(Math.cos(a)*24,0,Math.sin(a)*24);scene.add(pad);}
+
+  // boundary — perimeter fence of neon pylons + faint force wall
+  (function(){const pyl=new THREE.CylinderGeometry(0.5,0.7,12,8);for(let i=0;i<64;i++){const a=i/64*Math.PI*2;const col=i%2?0x00e5ff:0xffb43a;const p=new THREE.Mesh(pyl,new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:2}));p.position.set(Math.cos(a)*WORLD_R,6,Math.sin(a)*WORLD_R);scene.add(p);}
     const wall=new THREE.Mesh(new THREE.CylinderGeometry(WORLD_R,WORLD_R,26,64,1,true),new THREE.MeshBasicMaterial({color:0x2266aa,transparent:true,opacity:0.06,side:THREE.DoubleSide,depthWrite:false,fog:false}));wall.position.y=13;scene.add(wall);})();
-  // central beacon landmark
-  (function(){const g=new THREE.Group();const tower=new THREE.Mesh(new THREE.CylinderGeometry(1.4,3,40,8),new THREE.MeshStandardMaterial({color:0x141a30,metalness:0.8,roughness:0.3,emissive:0x0a1030,emissiveIntensity:0.6}));tower.position.y=20;g.add(tower);const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.6,60,10,1,true),new THREE.MeshBasicMaterial({color:0x00e5ff,transparent:true,opacity:0.22,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));beam.position.y=44;g.add(beam);const top=new THREE.Mesh(new THREE.SphereGeometry(2.2,16,12),new THREE.MeshStandardMaterial({color:0x00e5ff,emissive:0x00e5ff,emissiveIntensity:2.6}));top.position.y=41;g.add(top);g.position.set(0,0,0);scene.add(g);obstacles.push({x:0,z:0,r:3.4});})();
+  // central beacon / control tower landmark
+  (function(){const g=new THREE.Group();const tower=new THREE.Mesh(new THREE.CylinderGeometry(1.6,3.4,44,10),new THREE.MeshStandardMaterial({color:0x1c2236,metalness:0.8,roughness:0.3,emissive:0x0a1030,emissiveIntensity:0.6}));tower.position.y=22;g.add(tower);const cab=new THREE.Mesh(new THREE.CylinderGeometry(4,3,4,12),new THREE.MeshStandardMaterial({color:0x0d1a30,metalness:0.7,roughness:0.2,emissive:0x123a66,emissiveIntensity:1.1,transparent:true,opacity:0.9}));cab.position.y=40;g.add(cab);const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.6,70,10,1,true),new THREE.MeshBasicMaterial({color:0x00e5ff,transparent:true,opacity:0.2,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));beam.position.y=50;g.add(beam);const top=new THREE.Mesh(new THREE.SphereGeometry(1.4,16,12),new THREE.MeshStandardMaterial({color:0x00e5ff,emissive:0x00e5ff,emissiveIntensity:2.6}));top.position.y=46;g.add(top);scene.add(g);obstacles.push({x:0,z:0,r:3.6});})();
 
   // player car
   const car=makeCar();scene.add(car);applySkin("aurora");
@@ -4308,19 +4336,18 @@ three/build/three.module.js:
   function fireGuns(){const fx=-Math.sin(state.hd),fz=-Math.cos(state.hd);let fired=0;for(const sx of[-0.95,0.95]){for(const b of bolts){if(b.active)continue;b.active=true;b.t=0;b.mesh.visible=true;const rx=Math.cos(state.hd)*sx,rz=-Math.sin(state.hd)*sx;b.mesh.position.set(state.x+rx+fx*2,0.7,state.z+rz+fz*2);b.mesh.rotation.set(Math.PI/2,0,-state.hd);b.vx=fx*BOLT_SPEED;b.vz=fz*BOLT_SPEED;fired=1;break;}}if(fired){audio.laser();if(carParts.muzzleGlow)carParts.muzzleGlow.forEach(m=>m.material.emissiveIntensity=3);}}
 
   /* speed lines — surroundings rush past when you accelerate/boost (racing-mode feel) */
-  const slines=[];const slGeo=new THREE.BoxGeometry(0.14,0.14,7);for(let i=0;i<110;i++){const m=new THREE.Mesh(slGeo,new THREE.MeshBasicMaterial({color:0xbfeaff,transparent:true,opacity:0.8,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));m.visible=false;scene.add(m);slines.push({mesh:m,active:false,t:0,vx:0,vz:0,life:0.5,op:0.8});}
+  const slines=[];const slGeo=new THREE.BoxGeometry(0.1,0.1,9);for(let i=0;i<48;i++){const m=new THREE.Mesh(slGeo,new THREE.MeshBasicMaterial({color:0xbfeaff,transparent:true,opacity:0.8,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));m.visible=false;scene.add(m);slines.push({mesh:m,active:false,t:0,vx:0,vz:0,life:0.5,op:0.8});}
   let slTimer=0;
   function emitSpeedLines(spN,boosting){
     const f=fwd(state.hd);const rx=-f.z,rz=f.x;                      // right vector
-    const spd=Math.abs(state.speed);const rush=spd*1.7+70;
-    const n=boosting?5:3;
-    for(let k=0;k<n;k++){for(const l of slines){if(l.active)continue;l.active=true;l.t=0;l.life=0.3+Math.random()*0.22;l.mesh.visible=true;
-      const ahead=20+Math.random()*38, lat=(4+Math.random()*22)*(Math.random()<0.5?-1:1), hy=0.4+Math.random()*9;
+    const spd=Math.abs(state.speed);const rush=spd*1.9+80;
+    for(let k=0;k<2;k++){for(const l of slines){if(l.active)continue;l.active=true;l.t=0;l.life=0.24+Math.random()*0.16;l.mesh.visible=true;
+      const ahead=22+Math.random()*34, lat=(9+Math.random()*24)*(Math.random()<0.5?-1:1), hy=0.5+Math.random()*7;
       l.mesh.position.set(state.x+f.x*ahead+rx*lat, hy, state.z+f.z*ahead+rz*lat);
       l.mesh.rotation.set(Math.PI/2,0,-state.hd);
-      l.mesh.scale.z=1.4+spN*3.4;
+      l.mesh.scale.z=1.8+spN*4.2+(boosting?2:0);
       l.vx=-f.x*rush;l.vz=-f.z*rush;
-      l.op=boosting?0.95:0.7;const shade=boosting?0xbff2ff:0x9fd8ff;l.mesh.material.color.setHex(shade);l.mesh.material.opacity=l.op;break;}}
+      l.op=boosting?0.9:0.6;const shade=boosting?0xcff6ff:0x9fd8ff;l.mesh.material.color.setHex(shade);l.mesh.material.opacity=l.op;break;}}
   }
   function speedLineFrame(dt){for(const l of slines){if(!l.active)continue;l.t+=dt;l.mesh.position.x+=l.vx*dt;l.mesh.position.z+=l.vz*dt;l.mesh.material.opacity=Math.max(0,l.op-l.t/l.life*l.op);if(l.t>l.life){l.active=false;l.mesh.visible=false;}}}
 
@@ -4378,7 +4405,7 @@ three/build/three.module.js:
   function renderOverlay(){
     if(state.phase==="ready"){
       el.card.innerHTML='<h1 class="gradient-text">MOON RACER</h1>'+
-        '<p class="lead">An open lunar city — <b style="color:#cbd5e1">drive anywhere</b>. Hunt roaming aliens, run them over or gun them down, grab loot, and rack up score.</p>'+
+        '<p class="lead">An open <b style="color:#cbd5e1">moon base</b> — roads, domes, hangars &amp; towers to <b style="color:#cbd5e1">drive anywhere</b>. Hunt roaming aliens, run them over or gun them down, grab loot, and rack up score.</p>'+
         '<div class="row"><div class="stat"><div class="v" id="ovBest">'+meta.best.toLocaleString()+'</div><div class="l">Best</div></div><div class="stat"><div class="v coins">'+meta.coins.toLocaleString()+'</div><div class="l">Coins</div></div></div>'+
         '<div class="row"><button class="btn-gradient" id="startBtn">▶ Drive</button></div>'+
         '<div class="hint"><b>Steer</b>: drag the wheel (or tilt) · 🚀 boost · 🛑 brake / reverse · 🔫 hold to fire<br><span class="kbd-hint">← → steer · ↑ boost · ↓ brake/reverse · F fire · Space start</span><span class="touch-hint" style="display:none"></span></div>';
@@ -4448,7 +4475,7 @@ three/build/three.module.js:
       const kmh=Math.round(Math.abs(state.speed)*3.4);el.spVal.textContent=kmh;el.spFill.style.width=(spN*100)+"%";
       audio.setEngineIntensity(spN);
       // ---- speed lines (racing rush when accelerating) ----
-      speedLineFrame(dt);const fastRush=boosting||spN>0.32;slTimer-=dt;if(fastRush&&slTimer<=0){slTimer=Math.max(0.006,0.045-spN*0.04);emitSpeedLines(spN,boosting);}
+      speedLineFrame(dt);const fastRush=boosting||spN>0.34;slTimer-=dt;if(fastRush&&slTimer<=0){slTimer=Math.max(0.03,0.06-spN*0.03);emitSpeedLines(spN,boosting);}
       if(state.invuln>0)state.invuln-=dt;
       if(state.hurtT>0){state.hurtT-=dt;el.hurtFlash.style.opacity=(state.hurtT).toFixed(2);}else el.hurtFlash.style.opacity="0";
 
