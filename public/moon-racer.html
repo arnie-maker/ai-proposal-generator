@@ -59,9 +59,11 @@
   .rec-flash { position:absolute; inset:0; pointer-events:none; opacity:0; box-shadow:inset 0 0 120px rgba(255,215,106,0.5); }
 
   /* action buttons */
-  .actions { pointer-events:none; position:absolute; right:20px; bottom:calc(env(safe-area-inset-bottom) + 20px); display:flex; align-items:flex-end; gap:14px; }
-  .act-btn { pointer-events:auto; touch-action:none; width:88px; height:88px; border-radius:50%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; cursor:pointer; font-weight:800; letter-spacing:.06em; font-size:11px; border:3px solid; transition:transform .12s ease; }
-  .act-btn .rk { font-size:23px; }
+  .actions { pointer-events:none; position:absolute; right:16px; bottom:calc(env(safe-area-inset-bottom) + 18px); display:flex; align-items:flex-end; gap:10px; }
+  .act-btn { pointer-events:auto; touch-action:none; width:70px; height:70px; border-radius:50%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; cursor:pointer; font-weight:800; letter-spacing:.04em; font-size:10px; border:3px solid; transition:transform .12s ease; }
+  .act-btn .rk { font-size:19px; }
+  .fire-btn { color:#8affff; border-color:rgba(80,240,255,0.75); background:radial-gradient(circle at 50% 35%, rgba(60,220,255,0.34), rgba(4,16,20,0.85)); box-shadow:0 0 24px rgba(60,220,255,0.32); }
+  .fire-btn.active { transform:scale(0.93); box-shadow:0 0 40px rgba(60,220,255,0.7); }
   .act-btn:active { transform:scale(0.93); }
   .boost-btn { color:#ffe08a; border-color:rgba(255,193,77,0.7); background:radial-gradient(circle at 50% 35%, rgba(255,140,60,0.35), rgba(20,10,4,0.85)); box-shadow:0 0 24px rgba(255,150,40,0.3); }
   .boost-btn.active { transform:scale(0.93); box-shadow:0 0 40px rgba(255,150,40,0.7); }
@@ -153,6 +155,7 @@
   <div class="drivehint" id="driveHint">Slide anywhere to steer</div>
 
   <div class="actions">
+    <button class="act-btn fire-btn" id="fireBtn"><span class="rk">🔫</span>FIRE</button>
     <button class="act-btn missile-btn" id="missileBtn"><span class="rk">🎯</span>MISSILE</button>
     <button class="act-btn bomb-btn" id="bombBtn"><span class="badge" id="bombCount">3</span><span class="rk">💣</span>BOMB</button>
     <button class="act-btn boost-btn" id="boostBtn"><span class="rk">🚀</span>BOOST</button>
@@ -4248,7 +4251,7 @@ three/build/three.module.js:
   /* ============================ DOM + STORAGE ============================ */
   const app=document.getElementById("app");
   const $=(id)=>document.getElementById(id);
-  const el={score:$("score"),mult:$("mult"),kills:$("kills"),best:$("best"),coinHud:$("coinHud"),soundBtn:$("soundBtn"),ctrlBtn:$("ctrlBtn"),centerBtn:$("centerBtn"),combo:$("combo"),comboX:$("comboX"),comboFill:$("comboFill"),lvNum:$("lvNum"),lvNext:$("lvNext"),lvFill:$("lvFill"),m:[$("m0"),$("m1"),$("m2")],powers:$("powers"),popups:$("popups"),toasts:$("toasts"),banner:$("banner"),steer:$("steer"),steerKnob:$("steer").querySelector(".knob"),driveHint:$("driveHint"),boostBtn:$("boostBtn"),missileBtn:$("missileBtn"),boostFlash:$("boostFlash"),recFlash:$("recFlash"),overlay:$("overlay"),card:$("card")};
+  const el={score:$("score"),mult:$("mult"),kills:$("kills"),best:$("best"),coinHud:$("coinHud"),soundBtn:$("soundBtn"),ctrlBtn:$("ctrlBtn"),centerBtn:$("centerBtn"),combo:$("combo"),comboX:$("comboX"),comboFill:$("comboFill"),lvNum:$("lvNum"),lvNext:$("lvNext"),lvFill:$("lvFill"),m:[$("m0"),$("m1"),$("m2")],powers:$("powers"),popups:$("popups"),toasts:$("toasts"),banner:$("banner"),steer:$("steer"),steerKnob:$("steer").querySelector(".knob"),driveHint:$("driveHint"),boostBtn:$("boostBtn"),missileBtn:$("missileBtn"),fireBtn:$("fireBtn"),boostFlash:$("boostFlash"),recFlash:$("recFlash"),overlay:$("overlay"),card:$("card")};
   const LS={get:(k,d)=>{try{const v=localStorage.getItem("mr."+k);return v==null?d:v;}catch(e){return d;}},set:(k,v)=>{try{localStorage.setItem("mr."+k,v);}catch(e){}}};
 
   const meta={
@@ -4267,7 +4270,7 @@ three/build/three.module.js:
   el.coinHud.textContent="💰 "+meta.coins.toLocaleString();
 
   const audio=new CyberpunkAudio();
-  const state={phase:"ready",speed:BASE_SPEED,distance:0,scoreVal:0,carX:0,vx:0,targetX:0,steer:0,boostBtn:0,kills:0,fireTimer:0,missileCd:0,muzzle:0,boostVis:0,
+  const state={phase:"ready",speed:BASE_SPEED,distance:0,scoreVal:0,carX:0,vx:0,targetX:0,steer:0,boostBtn:0,firing:0,kills:0,fireTimer:0,missileCd:0,muzzle:0,boostVis:0,
     combo:0,comboT:0,mult:1,maxCombo:0,orbCount:0,missileKills:0,
     level:1,xp:0,xpNext:800, timeScale:1,slowmo:0,hitstop:0,shakeX:0,shakeY:0,shake:0,
     recordShown:false, camX:0,
@@ -4656,7 +4659,7 @@ three/build/three.module.js:
 
   /* ============================ INPUT ============================ */
   const keys=new Set();
-  window.addEventListener("keydown",(e)=>{const k=e.key.toLowerCase();if(["arrowleft","arrowright","arrowup","arrowdown"," "].includes(k))e.preventDefault();keys.add(k);if(k===" "&&state.phase!=="playing")startGame();if((k==="f"||k==="m")&&state.phase==="playing")fireMissile();});
+  window.addEventListener("keydown",(e)=>{const k=e.key.toLowerCase();if(["arrowleft","arrowright","arrowup","arrowdown"," "].includes(k))e.preventDefault();keys.add(k);if(k===" "&&state.phase!=="playing")startGame();if(k==="m"&&state.phase==="playing")fireMissile();});
   window.addEventListener("keyup",(e)=>keys.delete(e.key.toLowerCase()));
 
   // --- Steering mode: 'swipe' (floating drag) or 'tilt' (gyro) ---
@@ -4690,6 +4693,9 @@ three/build/three.module.js:
   const boostOff=()=>{state.boostBtn=0;el.boostBtn.classList.remove("active");};
   el.boostBtn.addEventListener("pointerdown",boostOn);el.boostBtn.addEventListener("pointerup",boostOff);el.boostBtn.addEventListener("pointerleave",boostOff);el.boostBtn.addEventListener("pointercancel",boostOff);el.boostBtn.addEventListener("contextmenu",(e)=>e.preventDefault());
   el.missileBtn.addEventListener("pointerdown",(e)=>{e.preventDefault();if(state.phase!=="playing"){startGame();}fireMissile();});el.missileBtn.addEventListener("contextmenu",(e)=>e.preventDefault());
+  const fireOn=(e)=>{if(e)e.preventDefault();state.firing=1;el.fireBtn.classList.add("active");if(state.phase!=="playing")startGame();};
+  const fireOff=()=>{state.firing=0;el.fireBtn.classList.remove("active");};
+  el.fireBtn.addEventListener("pointerdown",fireOn);el.fireBtn.addEventListener("pointerup",fireOff);el.fireBtn.addEventListener("pointerleave",fireOff);el.fireBtn.addEventListener("pointercancel",fireOff);el.fireBtn.addEventListener("contextmenu",(e)=>e.preventDefault());
   const bombBtn=$("bombBtn");
   function updateBombUI(){const c=bombBtn&&bombBtn.querySelector(".badge");if(c)c.textContent=state.bombs;if(bombBtn)bombBtn.disabled=state.bombs<=0;}
   function bombBlast(){
@@ -4716,9 +4722,9 @@ three/build/three.module.js:
       el.card.innerHTML='<h1 class="gradient-text">MOON RACER</h1>'+
         '<div><span class="rank" style="background:'+rk.c+'22;color:'+rk.c+'">'+rk.n+'</span></div>'+streakLine+
         '<div class="row"><div class="stat"><div class="v" id="ovBest">'+meta.best.toLocaleString()+'</div><div class="l">Best</div></div><div class="stat"><div class="v coins">'+meta.coins.toLocaleString()+'</div><div class="l">Coins</div></div><div class="stat"><div class="v">'+meta.skins.length+'/'+SKINS.length+'</div><div class="l">Ships</div></div></div>'+
-        '<p class="lead">Cannons auto-fire — blast alien UFOs, chain combos, grab loot &amp; power-ups, and beat your record.</p>'+
+        '<p class="lead">Hold 🔫 FIRE to blast alien UFOs — chain combos, grab loot &amp; power-ups, and beat your record.</p>'+
         '<div class="row"><button class="btn-gradient" id="startBtn">▶ Race</button><button class="btn-ghost" id="garageBtn">🏁 Garage</button></div>'+
-        '<div class="hint"><b>Steer</b>: '+(mode==="tilt"?"tilt your phone":"slide anywhere on screen")+' · guns auto-fire · 🎯 missile · 🚀 boost<br><span class="kbd-hint">← → steer · F missile · ↑ boost · Space start</span></div>';
+        '<div class="hint"><b>Steer</b>: '+(mode==="tilt"?"tilt your phone":"slide anywhere on screen")+' · 🔫 hold to fire · 🎯 missile · 🚀 boost<br><span class="kbd-hint">← → steer · F fire · M missile · ↑ boost · Space start</span></div>';
       $("startBtn").addEventListener("click",startGame);$("garageBtn").addEventListener("click",openGarage);
     } else {
       const done=state.missions.filter(m=>m.done).length;
@@ -4742,7 +4748,7 @@ three/build/three.module.js:
   /* ============================ GAME CONTROL ============================ */
   function startGame(){
     state.phase="playing";state.speed=BASE_SPEED;state.distance=0;state.scoreVal=0;state.carX=0;state.targetX=0;state.vx=0;state.steer=0;steerTouch=0;
-    state.kills=0;state.fireTimer=0;state.missileCd=0;state.combo=0;state.comboT=0;state.mult=1;state.maxCombo=0;state.orbCount=0;state.missileKills=0;
+    state.kills=0;state.firing=0;state.fireTimer=0;state.missileCd=0;state.combo=0;state.comboT=0;state.mult=1;state.maxCombo=0;state.orbCount=0;state.missileKills=0;
     state.level=1;state.xp=0;state.xpNext=800;state.recordShown=false;state.shield=0;state.coinsRun=0;
     state.power.overdrive=0;state.power.magnet=0;state.power.x2=0;state.gunLevel=1;state.bombs=3;state.wings=0;if(carParts.wings)carParts.wings.forEach(w=>w.visible=false);if(typeof updateBombUI==="function")updateBombUI();
     movers.forEach((m,i)=>{if(m.type==="boss"){m.active=false;m.mesh.visible=false;return;}m.active=true;m.mesh.visible=true;m.hp=m.maxhp;m.hitT=0;m.nm=false;m.mesh.position.z=SPAWN_Z+i*((TRACK_LENGTH-20)/movers.length);m.mesh.position.x=laneX();m.mesh.position.y=m.y0;m.baseX=m.mesh.position.x;m.fire=1+Math.random();});if(FX2.reset)FX2.reset();if(FX3.reset)FX3.reset();
@@ -4800,8 +4806,8 @@ three/build/three.module.js:
 
       // combo decay
       if(s.combo>0){s.comboT-=dt;if(s.comboT<=0)breakCombo();}
-      // auto-fire
-      s.fireTimer-=dt;const fi=s.power.overdrive>0?FIRE_INTERVAL*0.6:FIRE_INTERVAL;if(s.fireTimer<=0){s.fireTimer=fi;fireGuns();}
+      // manual fire (hold 🔫 FIRE button / F / J / Space)
+      s.fireTimer-=dt;const firingNow=s.firing||keys.has("f")||keys.has("j")||keys.has(" ");if(firingNow&&s.fireTimer<=0){s.fireTimer=s.power.overdrive>0?FIRE_INTERVAL*0.6:FIRE_INTERVAL;fireGuns();}
       s.missileCd=Math.max(0,s.missileCd-dt);el.missileBtn.disabled=s.missileCd>0;
       // power timers
       for(const k in s.power){if(s.power[k]>0)s.power[k]=Math.max(0,s.power[k]-dt);}
