@@ -4178,7 +4178,10 @@ three/build/three.module.js:
     {id:"toxic",name:"Toxic",price:800,a:0x8dff3a,b:0x33ffbb},
     {id:"ice",name:"Ice",price:1400,a:0xa9e8ff,b:0xffffff},
     {id:"void",name:"Void",price:2200,a:0xb060ff,b:0x5a7bff},
-    {id:"solgold",name:"Sol Gold",price:3600,a:0xffd76a,b:0xffb03a}
+    {id:"solgold",name:"Sol Gold",price:3600,a:0xffd76a,b:0xffb03a},
+    {id:"crimson",name:"Crimson",price:5000,a:0xff3b5c,b:0xff9a3b},
+    {id:"neon",name:"Neon Mint",price:7000,a:0x00ffa3,b:0x00e5ff},
+    {id:"nebula",name:"Nebula",price:9999,a:0xd06bff,b:0xff2bd6}
   ];
   const UPGRADES=[
     {id:"speed",name:"Top Speed",icon:"🚀",desc:"Higher cruise + nitro speed"},
@@ -4198,7 +4201,10 @@ three/build/three.module.js:
     {id:"nitro",text:"Burn nitro {n}s",n:()=>5+Math.floor(Math.random()*5),rew:100,ev:"nitro"},
     {id:"dist",text:"Race {n}m",n:()=>2500+Math.floor(Math.random()*3)*500,rew:130,ev:"dist"},
     {id:"score",text:"Score {n}",n:()=>8000+Math.floor(Math.random()*5)*2000,rew:140,ev:"score",once:true},
-    {id:"combo",text:"Takedown chain x{n}",n:()=>3+Math.floor(Math.random()*2),rew:150,ev:"combo",once:true}
+    {id:"combo",text:"Takedown chain x{n}",n:()=>3+Math.floor(Math.random()*2),rew:150,ev:"combo",once:true},
+    {id:"near",text:"{n} near-misses",n:()=>4+Math.floor(Math.random()*4),rew:120,ev:"near"},
+    {id:"pdrift",text:"{n} perfect drifts",n:()=>3+Math.floor(Math.random()*3),rew:140,ev:"pdrift"},
+    {id:"clean",text:"Finish with no hits",n:()=>1,rew:180,ev:"clean",once:true}
   ];
   const ACH=[
     {id:"first",name:"First Blood",d:"Take down a racer",rew:60,chk:m=>m.tot.td>=1},
@@ -4256,17 +4262,23 @@ three/build/three.module.js:
   const app=document.getElementById("app");
   const $=(id)=>document.getElementById(id);
   const LS={get:(k,d)=>{try{const v=localStorage.getItem("mra_"+k);return v==null?d:v;}catch(e){return d;}},set:(k,v)=>{try{localStorage.setItem("mra_"+k,v);}catch(e){}}};
+  const DAILY_POOL=[{t:"Take down {n} racers",n:8,ev:"td",rew:260},{t:"Reach {n} km/h",n:420,ev:"top",rew:220,once:true},{t:"Drift {n}s total",n:20,ev:"drift",rew:240},{t:"Score {n}",n:15000,ev:"score",rew:280,once:true},{t:"Catch {n} big airs",n:5,ev:"air",rew:230},{t:"Win the race",n:1,ev:"win",rew:300}];
+  const RIVAL_NAMES=["ZYX-9","Nova","Krll","Vex","Orbit","Sable","Quark","Hex","Pulsar","Rook","Talon","Ceres","Drift-7","Onyx","Zenith"];
   function loadMeta(){let m={};try{m=JSON.parse(LS.get("save","{}"))||{};}catch(e){m={};}
     m.best=m.best||0;m.coins=(m.coins==null?0:m.coins);m.xp=m.xp||0;m.level=m.level||1;m.streak=m.streak||0;m.lastDay=m.lastDay||0;
     m.skin=m.skin||"aurora";m.owned=(m.owned&&m.owned.length)?m.owned:["aurora"];
     m.up=Object.assign({speed:0,accel:0,handling:0,nitro:0,armor:0},m.up||{});m.ach=m.ach||[];
-    m.tot=Object.assign({races:0,td:0,dist:0,wins:0,air:0,top:0},m.tot||{});m.firstDone=!!m.firstDone;return m;}
+    m.tot=Object.assign({races:0,td:0,dist:0,wins:0,air:0,top:0,near:0,pdrift:0},m.tot||{});m.firstDone=!!m.firstDone;
+    m.name=m.name||"";m.prestige=m.prestige||0;m.freeze=(m.freeze==null?1:m.freeze);m.lb=m.lb||null;m.spinDay=m.spinDay||0;
+    m.dc=m.dc||{day:0,done:false,def:null};m.crateDry=m.crateDry||0;m.lastRank=m.lastRank||0;return m;}
   const meta=loadMeta();
-  let saveT=0;function saveMeta(){try{LS.set("save",JSON.stringify(meta));}catch(e){}}
+  function saveMeta(){try{LS.set("save",JSON.stringify(meta));}catch(e){}}
   const epochDay=()=>Math.floor(Date.now()/86400000);
-  let NITRO_MUL=1;
-  function applyUpgrades(){const u=meta.up;CRUISE=BASE.cruise*(1+u.speed*0.06);NITRO_SPD=BASE.nitroSpd*(1+u.speed*0.075);ACCEL=BASE.accel*(1+u.accel*0.14);TURN_LANE=BASE.turn*(1+u.handling*0.09);MAXHP=BASE.hp+(u.armor||0);NITRO_MUL=1+u.nitro*0.14;}
+  let NITRO_MUL=1, COIN_MUL=1;
+  function applyUpgrades(){const u=meta.up;CRUISE=BASE.cruise*(1+u.speed*0.06);NITRO_SPD=BASE.nitroSpd*(1+u.speed*0.075);ACCEL=BASE.accel*(1+u.accel*0.14);TURN_LANE=BASE.turn*(1+u.handling*0.09);MAXHP=BASE.hp+(u.armor||0);NITRO_MUL=1+u.nitro*0.14;COIN_MUL=1+meta.prestige*0.1;}
   applyUpgrades();
+  // seed a local "global" leaderboard with bot scores on first run
+  if(!meta.lb){meta.lb=[];const bots=["ZYX-9","Nova","Vex","Pulsar","Onyx","Quark","Sable","Rook","Ceres","Talon"];for(let i=0;i<10;i++)meta.lb.push({name:bots[i],score:Math.round(4000+Math.pow(1.9,10-i)*260+Math.random()*800),bot:true});meta.lb.sort((a,b)=>b.score-a.score);saveMeta();}
   const el={score:$("score"),best:$("best"),lap:$("lap"),pos:$("pos"),takedowns:$("takedowns"),soundBtn:$("soundBtn"),
     spVal:$("spVal"),spFill:$("spFill"),nFill:$("nFill"),nbar:$("nbar"),boostFlash:$("boostFlash"),hurtFlash:$("hurtFlash"),speedBlur:$("speedBlur"),
     popups:$("popups"),toasts:$("toasts"),overlay:$("overlay"),card:$("card"),wheel:$("wheel"),wheelKnob:$("wheelKnob"),nitroBtn:$("nitroBtn"),driftBtn:$("driftBtn"),miniCv:$("miniCv")};
@@ -4279,12 +4291,27 @@ three/build/three.module.js:
   function unlockAch(a){if(meta.ach.includes(a.id))return;meta.ach.push(a.id);meta.coins+=a.rew;saveMeta();updateMetaHud();toast("🏆 "+a.name+"  +"+a.rew+"💰","#ffd76a");audio.power&&audio.power();}
   function checkAch(){for(const a of ACH){if(!meta.ach.includes(a.id)&&a.chk(meta))unlockAch(a);}}
   // daily streak + first-play bonus
-  (function daily(){const d=epochDay();let newDay=false;if(!meta.lastDay){meta.streak=1;newDay=true;}else if(d===meta.lastDay){}else if(d===meta.lastDay+1){meta.streak++;newDay=true;}else if(d>meta.lastDay+1){meta.streak=1;newDay=true;}if(newDay){meta.lastDay=d;meta.dailyBonus=Math.min(320,40+meta.streak*24);meta.coins+=meta.dailyBonus;}if(!meta.firstDone){meta.firstDone=true;meta.coins+=150;meta.welcome=true;}saveMeta();})();
+  (function daily(){const d=epochDay();let newDay=false;
+    if(!meta.lastDay){meta.streak=1;newDay=true;}
+    else if(d===meta.lastDay){}
+    else{const gap=d-meta.lastDay;
+      if(gap===1){meta.streak++;newDay=true;}
+      else if(meta.freeze>0){meta.freeze--;meta.streak++;newDay=true;meta.freezeUsed=true;}
+      else{meta.streak=1;newDay=true;if(gap>=3)meta.comeback=true;}}
+    if(newDay){meta.lastDay=d;meta.dailyBonus=Math.min(360,40+meta.streak*24);meta.coins+=meta.dailyBonus;if(meta.comeback)meta.coins+=200;}
+    if(!meta.firstDone){meta.firstDone=true;meta.coins+=150;meta.welcome=true;}
+    if(meta.dc.day!==d){const def=DAILY_POOL[Math.abs(d)%DAILY_POOL.length];meta.dc={day:d,done:false,def:def};}
+    saveMeta();})();
+  function dailySpin(){const d=epochDay();if(meta.spinDay===d)return false;meta.spinDay=d;const opts=[60,90,120,180,260,400,600];const win=Math.round(opts[Math.floor(Math.random()*opts.length)]*COIN_MUL);addCoins(win);toast("🎡 Daily Spin  +"+win+"💰","#ffd76a");audio.power&&audio.power();return true;}
+  function setCallsign(){const n=(window.prompt&&window.prompt("Enter your racer callsign:",meta.name||"You")||"").trim().slice(0,12);if(n){meta.name=n;saveMeta();}renderOverlay();}
+  function doPrestige(){if(meta.level<20)return;meta.prestige++;meta.level=1;meta.xp=0;applyUpgrades();saveMeta();updateMetaHud();checkAch();toast("🌟 PRESTIGE "+meta.prestige+"! +"+(meta.prestige*10)+"% coins forever","#ff2bd6");audio.power&&audio.power();renderOverlay();}
+  function submitScore(sc){const nm=meta.name||"You";meta.lb.push({name:nm,score:sc});meta.lb.sort((a,b)=>b.score-a.score);meta.lb=meta.lb.slice(0,20);saveMeta();let rank=meta.lb.findIndex(e=>e.score===sc&&!e.bot);if(rank<0)rank=meta.lb.length;return rank+1;}
   updateMetaHud();applySkin(meta.skin);
 
   const state={phase:"ready",t:0,lane:0,speed:0,steer:0,drift:0,nitroOn:0,nitro:0,driftYaw:0,
     score:0,takedowns:0,hp:3,lap:1,carY:0,vy:0,air:0,shake:0,hurtT:0,invuln:0,boostVis:0,
-    mult:1,chain:0,chainT:0,maxChain:0,driftTime:0,nitroTime:0,dist:0,topSpeed:0,missions:[],coinsRun:0};
+    mult:1,chain:0,chainT:0,maxChain:0,driftTime:0,nitroTime:0,dist:0,topSpeed:0,missions:[],coinsRun:0,
+    mode:"circuit",dcTask:null,driftHold:0,hitStop:0,crateReward:0,crateTier:"",gambled:false,hitThisRun:false,diff:1,screen:null,garageTab:"ships"};
   const audio=new CyberpunkAudio();
 
   /* ============================ RENDERER / SCENE ============================ */
@@ -4354,6 +4381,9 @@ three/build/three.module.js:
   const ramps=[];const rampMat=new THREE.MeshStandardMaterial({color:0x223,metalness:0.7,roughness:0.4,emissive:0x00e5ff,emissiveIntensity:0.5});
   for(let k=0;k<7;k++){const idx=Math.floor((k+0.5)/7*NODES);const n=track[idx];const ramp=new THREE.Mesh(new THREE.BoxGeometry(ROAD_HW*1.6,2.2,8),rampMat);ramp.position.set(n.x,1.0,n.z);ramp.rotation.y=Math.atan2(n.tx,n.tz);ramp.rotation.x=-0.28;scene.add(ramp);const chev=new THREE.Mesh(new THREE.BoxGeometry(ROAD_HW*1.4,0.1,1.4),new THREE.MeshBasicMaterial({color:0x00e5ff}));chev.position.set(n.x,2.0,n.z);scene.add(chev);ramps.push(idx);}
   const nitroPads=[];for(let k=0;k<14;k++){const idx=Math.floor((k+0.3)/14*NODES);if(ramps.includes(idx))continue;const n=track[idx];const pad=new THREE.Mesh(new THREE.PlaneGeometry(ROAD_HW*1.1,3.4),new THREE.MeshBasicMaterial({color:0x33e0ff,transparent:true,opacity:0.34,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,depthWrite:false}));pad.rotation.x=-Math.PI/2;pad.rotation.z=-Math.atan2(n.tx,n.tz);pad.position.set(n.x,0.14,n.z);scene.add(pad);nitroPads.push({idx,used:0});}
+  // floating coin pickups along the track
+  const coinPads=[];const coinGeo=new THREE.CylinderGeometry(0.7,0.7,0.14,16);const coinMat=new THREE.MeshStandardMaterial({color:0xffd76a,emissive:0xffb43a,emissiveIntensity:1.8,metalness:0.6,roughness:0.3});
+  for(let k=0;k<18;k++){const idx=Math.floor((k+0.62)/18*NODES);if(ramps.includes(idx))continue;const n=track[idx];const lane=(Math.random()-0.5)*ROAD_HW*1.3;const m=new THREE.Mesh(coinGeo,coinMat);m.rotation.x=Math.PI/2;m.position.set(n.x+n.nx*lane,1.3,n.z+n.nz*lane);scene.add(m);coinPads.push({idx,lane,mesh:m,used:0});}
 
   // start/finish gate
   (function(){const n=track[0];const a=Math.atan2(n.tx,n.tz);for(const s of[1,-1]){const pillar=new THREE.Mesh(new THREE.BoxGeometry(1.2,10,1.2),new THREE.MeshStandardMaterial({color:0xffd76a,emissive:0xffb43a,emissiveIntensity:2}));pillar.position.set(n.x+n.nx*s*(ROAD_HW+1),5,n.z+n.nz*s*(ROAD_HW+1));scene.add(pillar);}const bar=new THREE.Mesh(new THREE.BoxGeometry(ROAD_HW*2+4,1.2,0.6),new THREE.MeshStandardMaterial({color:0xffd76a,emissive:0xffb43a,emissiveIntensity:1.6}));bar.position.set(n.x,9.5,n.z);bar.rotation.y=a;scene.add(bar);})();
@@ -4383,8 +4413,8 @@ three/build/three.module.js:
 
   /* ============================ RIVALS (alien racers) ============================ */
   const rivals=[];const rivalHues=[0xff2bd6,0x66ffcc,0xffb43a,0xb060ff,0xff5a7a];
-  for(let i=0;i<7;i++){const mesh=makeRival(rivalHues[i%rivalHues.length]);scene.add(mesh);rivals.push({mesh,t:(i+1)/8*NODES,lane:(Math.random()-0.5)*ROAD_HW*1.2,spd:CRUISE*(0.62+Math.random()*0.16),alive:true,ph:Math.random()*6.28});}
-  function placeRivals(){rivals.forEach((r,i)=>{r.t=((state.t+ (i+1)*(NODES/9)) )%NODES;r.lane=(Math.random()-0.5)*ROAD_HW*1.2;r.spd=CRUISE*(0.62+Math.random()*0.16);r.alive=true;r.mesh.visible=true;});}
+  for(let i=0;i<7;i++){const mesh=makeRival(rivalHues[i%rivalHues.length]);scene.add(mesh);rivals.push({mesh,t:(i+1)/8*NODES,lane:(Math.random()-0.5)*ROAD_HW*1.2,spd:CRUISE*(0.62+Math.random()*0.16),alive:true,ph:Math.random()*6.28,name:RIVAL_NAMES[i%RIVAL_NAMES.length],nm:false});}
+  function placeRivals(){rivals.forEach((r,i)=>{r.t=((state.t+ (i+1)*(NODES/9)) )%NODES;r.lane=(Math.random()-0.5)*ROAD_HW*1.2;r.spd=CRUISE*(0.60+Math.random()*0.16)*(state.mode==="endless"?1:1);r.alive=true;r.mesh.visible=true;r.nm=false;r.name=RIVAL_NAMES[(i+Math.floor(Math.random()*RIVAL_NAMES.length))%RIVAL_NAMES.length];});}
 
   /* ============================ FEEDBACK ============================ */
   function popup(text,colorHex,wx,wy,wz){const v=new THREE.Vector3(wx,wy||2,wz).project(camera);if(v.z>1)return;const sx=(v.x*0.5+0.5)*app.clientWidth,sy=(-v.y*0.5+0.5)*app.clientHeight;const d=document.createElement("div");d.className="pop";d.textContent=text;d.style.left=sx+"px";d.style.top=sy+"px";d.style.color="#"+("000000"+(colorHex||0xffffff).toString(16)).slice(-6);d.style.fontSize="16px";el.popups.appendChild(d);setTimeout(()=>d.remove(),1000);}
@@ -4394,15 +4424,19 @@ three/build/three.module.js:
   function addNitro(n){state.nitro=Math.min(1,state.nitro+n);}
   function takedown(r,wx,wz){r.alive=false;r.mesh.visible=false;splat(wx,1.2,wz,0x7dff4a,20);boomFX(wx,1.2,wz,1.5);audio.boom();shakeAdd(0.35);
     state.takedowns++;el.takedowns.textContent="💥 "+state.takedowns;comboHit();const pts=Math.round(500*state.mult);addScore(pts);addNitro(0.3*NITRO_MUL);popup("+"+pts+(state.chain>1?" x"+state.chain:""),0x7dff4a,wx,2,wz);
+    if(r.name)popup("💥 "+r.name,0xffffff,wx,3.4,wz);if(state.chain>=3)state.hitStop=0.06;
     meta.tot.td++;missionEvent("td",1);checkAch();
-    setTimeout(()=>{if(state.phase==="playing"){r.t=(state.t+NODES*0.5)%NODES;r.lane=(Math.random()-0.5)*ROAD_HW*1.2;r.alive=true;r.mesh.visible=true;}},3500);}
-  function hurt(){if(state.invuln>0)return;state.hp--;state.invuln=1.3;state.hurtT=0.4;state.speed*=0.5;comboBreak();audio.crash();shakeAdd(0.5);if(state.hp<=0)endGame(false);}
+    setTimeout(()=>{if(state.phase==="playing"){r.t=(state.t+NODES*0.5)%NODES;r.lane=(Math.random()-0.5)*ROAD_HW*1.2;r.alive=true;r.mesh.visible=true;r.nm=false;}},3500);}
+  function hurt(){if(state.invuln>0)return;state.hp--;state.hitThisRun=true;state.invuln=1.3;state.hurtT=0.4;state.speed*=0.5;comboBreak();audio.crash();shakeAdd(0.5);if(state.hp<=0)endGame(false);}
 
   /* ===== session missions (Zeigarnik open loops) ===== */
   function rollMissions(){const pool=MISSION_POOL.slice();const pick=[];for(let i=0;i<3&&pool.length;i++){const m=pool.splice(Math.floor(Math.random()*pool.length),1)[0];pick.push({id:m.id,ev:m.ev,text:m.text,rew:m.rew,once:m.once,goal:m.n(),prog:0,done:false});}state.missions=pick;updateMissionUI();}
   function updateMissionUI(){if(!el.missions)return;if(state.phase!=="playing"){el.missions.innerHTML="";return;}el.missions.innerHTML=state.missions.map(m=>{const label=m.text.replace("{n}",m.goal.toLocaleString());const pr=m.done?"✓ +"+m.rew+"💰":(Math.floor(Math.min(m.prog,m.goal)))+"/"+m.goal;return '<div class="m-chip'+(m.done?" done":"")+'"><span>'+label+'</span><span class="mrew">'+pr+'</span></div>';}).join("");}
-  function missionEvent(ev,amt){let ch=false;for(const m of state.missions){if(m.done||m.ev!==ev)continue;if(m.once){if(amt>m.prog){m.prog=amt;ch=true;}if(amt>=m.goal){m.done=true;onMissionDone(m);}}else{m.prog+=(amt==null?1:amt);ch=true;if(m.prog>=m.goal){m.prog=m.goal;m.done=true;onMissionDone(m);}}}if(ch)updateMissionUI();}
+  function missionEvent(ev,amt){let ch=false;for(const m of state.missions){if(m.done||m.ev!==ev)continue;if(m.once){if(amt>m.prog){m.prog=amt;ch=true;}if(amt>=m.goal){m.done=true;onMissionDone(m);}}else{m.prog+=(amt==null?1:amt);ch=true;if(m.prog>=m.goal){m.prog=m.goal;m.done=true;onMissionDone(m);}}}if(ch)updateMissionUI();
+    // daily challenge (persists across runs until done today)
+    const dc=state.dcTask;if(dc&&!dc.done&&dc.ev===ev){if(dc.once){if(amt>=dc.goal){dc.done=true;onDailyDone(dc);}}else{dc.prog+=(amt==null?1:amt);if(dc.prog>=dc.goal){dc.done=true;onDailyDone(dc);}}}}
   function onMissionDone(m){addCoins(m.rew);state.coinsRun+=m.rew;toast("✅ "+m.text.replace("{n}",m.goal.toLocaleString())+"  +"+m.rew+"💰","#66ffcc");audio.coin&&audio.coin();updateMissionUI();}
+  function onDailyDone(dc){meta.dc.done=true;const rew=Math.round(dc.rew*COIN_MUL);addCoins(rew);state.coinsRun+=rew;saveMeta();toast("🎯 DAILY DONE  +"+rew+"💰","#ffd76a");audio.power&&audio.power();}
 
   /* ===== takedown combo chain (escalating reward) ===== */
   function comboHit(){state.chain++;state.chainT=2.6;state.mult=Math.min(6,1+state.chain*0.5);if(state.chain>state.maxChain)state.maxChain=state.chain;if(state.chain>=2){el.combo.classList.add("on");el.combo.innerHTML='<div class="cx">x'+state.chain+'</div><div class="cl">Takedown Chain</div>';missionEvent("combo",state.chain);}}
@@ -4435,32 +4469,69 @@ three/build/three.module.js:
   function renderOverlay(){
     if(state.screen==="garage"){renderGarage();el.overlay.classList.remove("hidden");return;}
     const rk=rankOf(meta.best);
+    if(state.screen==="lb"){renderLeaderboard();el.overlay.classList.remove("hidden");return;}
     if(state.phase==="ready"){
       if(!state.missions.length)rollMissions();
-      const streakLine=meta.streak>1?('<div class="streak">🔥 '+meta.streak+'-day streak'+(meta.dailyBonus?(' · +'+meta.dailyBonus+'💰 daily bonus'):'')+'</div>'):'';
+      const nm=meta.name?('<span style="color:#9fd8ff"> · '+meta.name+'</span>'):'';
+      const pst=meta.prestige>0?('<span class="rankpill" style="background:#ff2bd622;color:#ff2bd6;margin-left:6px">★'+meta.prestige+'</span>'):'';
+      const _notes=[];if(meta.dailyBonus)_notes.push('+'+meta.dailyBonus+'💰');if(meta.freezeUsed)_notes.push('❄️ freeze saved');if(meta.comeback)_notes.push('welcome back +200💰');
+      const streakLine=meta.streak>1?('<div class="streak">🔥 '+meta.streak+'-day streak'+(_notes.length?' · '+_notes.join(' · '):'')+'</div>'):'';
+      const dc=meta.dc&&meta.dc.def?('<div class="mrow" style="border:1px solid rgba(255,215,106,0.35);margin:8px 0"><span>'+(meta.dc.done?'✅ ':'🎯 ')+'Daily: '+meta.dc.def.t.replace("{n}",meta.dc.def.n.toLocaleString())+'</span><span class="rw">'+(meta.dc.done?'DONE':'+'+meta.dc.def.rew+'💰')+'</span></div>'):'';
+      const spinAvail=meta.spinDay!==epochDay();
+      const modeC=state.mode==="circuit", modeBtns='<div class="tabs" style="margin:8px 0 2px"><span class="tab'+(modeC?" on":"")+'" data-mode="circuit">🏁 Circuit ('+LAPS_TOTAL+' laps)</span><span class="tab'+(!modeC?" on":"")+'" data-mode="endless">♾️ Endless</span></div>';
+      const prestigeBtn=meta.level>=20?'<button class="tab" id="prestBtn" style="padding:11px 16px;color:#ff2bd6;border:1px solid rgba(255,43,214,0.5)">🌟 Prestige</button>':'';
       el.card.innerHTML='<h1 class="gradient-text">MOON RACER</h1>'+
-        '<div><span class="rankpill" style="background:'+rk.c+'22;color:'+rk.c+'">'+rk.n+'</span></div>'+streakLine+
+        '<div><span class="rankpill" style="background:'+rk.c+'22;color:'+rk.c+'" id="nameBtn">'+rk.n+nm+' ✏️</span>'+pst+'</div>'+streakLine+
         '<div class="row"><div class="stat"><div class="v">'+meta.best.toLocaleString()+'</div><div class="l">Best</div></div><div class="stat"><div class="v" style="color:#ffd76a">'+meta.coins.toLocaleString()+'</div><div class="l">Coins</div></div><div class="stat"><div class="v">'+meta.owned.length+'/'+SKINS.length+'</div><div class="l">Ships</div></div></div>'+
-        xpBar()+
-        '<div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#7c8bb0;margin-top:10px">Session goals</div>'+missionPreview()+
-        '<div class="rowbtns"><button class="btn-gradient" id="startBtn">▶ Race</button><button class="tab" id="garageBtn" style="padding:12px 18px">🏁 Garage</button></div>'+
-        '<div class="hint">Drag wheel to steer · 🔥 nitro · 🌀 drift corners for nitro<br><span class="kbd-hint">← → steer · ↑/Shift nitro · ↓/Space drift</span></div>';
+        xpBar()+ dc+
+        (spinAvail?'<button class="tab" id="spinBtn" style="margin:6px 0;padding:9px 16px;color:#ffd76a;border:1px solid rgba(255,215,106,0.5)">🎡 Daily Spin — free coins!</button>':'')+
+        '<div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#7c8bb0;margin-top:8px">Session goals</div>'+missionPreview()+
+        modeBtns+
+        '<div class="rowbtns"><button class="btn-gradient" id="startBtn">▶ Race</button><button class="tab" id="garageBtn" style="padding:12px 16px">🏁 Garage</button><button class="tab" id="lbBtn" style="padding:12px 16px">🏆 Ranks</button>'+prestigeBtn+'</div>'+
+        '<div class="hint">Drag wheel to steer · 🔥 nitro · 🌀 drift corners · take down rivals<br><span class="kbd-hint">← → steer · ↑/Shift nitro · ↓/Space drift</span></div>';
       $("startBtn").addEventListener("click",startGame);$("garageBtn").addEventListener("click",openGarage);
+      $("lbBtn").addEventListener("click",()=>{state.screen="lb";renderOverlay();});
+      $("nameBtn").addEventListener("click",setCallsign);
+      const sp=$("spinBtn");if(sp)sp.addEventListener("click",()=>{dailySpin();});
+      const pr=$("prestBtn");if(pr)pr.addEventListener("click",doPrestige);
+      el.card.querySelectorAll("[data-mode]").forEach(t=>t.addEventListener("click",()=>{state.mode=t.getAttribute("data-mode");renderOverlay();}));
     } else if(state.phase==="over"||state.phase==="win"){
       const won=state.phase==="win";const doneM=state.missions.filter(m=>m.done).length;
+      const lapTxt=state.mode==="endless"?(state.lap+" laps"):((state.lap>LAPS_TOTAL?LAPS_TOTAL:state.lap)+"/"+LAPS_TOTAL);
+      const crateCol=state.crateTier==="LEGENDARY"?"#ff2bd6":state.crateTier==="EPIC"?"#b060ff":state.crateTier==="RARE"?"#66ffcc":"#ffd76a";
+      let crateHtml;
+      if(!state.crateOpened){crateHtml='<div style="font-size:11px;color:#94a3b8;margin-top:8px">Tap the crate for a bonus!</div><div class="crate" id="crateBtn">🎁</div>';}
+      else{crateHtml='<div style="margin-top:8px;font-weight:800;color:'+crateCol+'">'+state.crateTier+' crate · +'+state.crateReward+'💰</div>'+(state.gambled?'':'<div class="rowbtns"><button class="tab" id="gambleBtn" style="border:1px solid rgba(255,43,214,0.5);color:#ff9de6">🎲 Double or Nothing (50/50)</button></div>');}
       el.card.innerHTML='<h1 class="gradient-text">'+(won?"FINISH! 🏁":"WRECKED")+'</h1>'+
-        (state.newBest?'<div style="color:#ffd76a;font-weight:800;margin:2px 0 6px">🏆 NEW BEST!</div>':'')+
-        '<div class="row"><div class="stat"><div class="v">'+state.score.toLocaleString()+'</div><div class="l">Score</div></div><div class="stat"><div class="v">'+state.takedowns+'</div><div class="l">Takedowns</div></div><div class="stat"><div class="v">'+(state.lap>LAPS_TOTAL?LAPS_TOTAL:state.lap)+'/'+LAPS_TOTAL+'</div><div class="l">Laps</div></div></div>'+
-        '<div class="earn"><span>💰 <b style="color:#ffd76a">+'+state.coinsRun+'</b> coins</span><span>✨ <b style="color:#c4b5fd">+'+state.xpGain+'</b> XP</span><span>🎯 <b>'+doneM+'/'+state.missions.length+'</b> goals</span></div>'+
-        xpBar()+
-        (state.crateOpened?'':'<div style="font-size:11px;color:#94a3b8;margin-top:8px">Tap the crate for a bonus!</div><div class="crate" id="crateBtn">🎁</div>')+
-        '<div class="rowbtns"><button class="btn-gradient" id="againBtn">▶ Race again</button><button class="tab" id="garageBtn" style="padding:12px 18px">🏁 Garage</button></div>';
+        (state.newBest?'<div style="color:#ffd76a;font-weight:800;margin:2px 0 4px">🏆 NEW BEST!</div>':'')+
+        (state.rankUp?'<div style="color:#8affff;font-weight:800;margin:2px 0 4px">⬆️ RANK UP — '+state.rankUp+'!</div>':'')+
+        '<div style="font-size:12px;color:#9fd8ff;margin:2px 0 4px">Leaderboard: <b>#'+state.lbRank+'</b> · faster than '+Math.max(1,Math.round((1-(state.lbRank/Math.max(state.lbRank,meta.lb.length)))*100))+'%</div>'+
+        '<div class="row"><div class="stat"><div class="v">'+state.score.toLocaleString()+'</div><div class="l">Score</div></div><div class="stat"><div class="v">'+state.takedowns+'</div><div class="l">Takedowns</div></div><div class="stat"><div class="v">'+lapTxt+'</div><div class="l">Laps</div></div></div>'+
+        '<div class="earn"><span>💰 <b style="color:#ffd76a">+'+state.coinsRun+'</b>'+(state.dbl?' <span style="color:#66ffcc">(2x!)</span>':'')+'</span><span>✨ <b style="color:#c4b5fd">+'+state.xpGain+'</b> XP</span><span>🎯 <b>'+doneM+'/'+state.missions.length+'</b></span></div>'+
+        (state.cleanBonus?'<div style="font-size:12px;color:#66ffcc;margin:-2px 0 4px">✨ Clean race bonus +'+state.cleanBonus+'💰</div>':'')+
+        xpBar()+ crateHtml+
+        '<div class="rowbtns"><button class="btn-gradient" id="againBtn">▶ Race again</button><button class="tab" id="garageBtn" style="padding:12px 16px">🏁 Garage</button><button class="tab" id="lbBtn2" style="padding:12px 16px">🏆 Ranks</button></div>';
       $("againBtn").addEventListener("click",startGame);$("garageBtn").addEventListener("click",openGarage);
+      $("lbBtn2").addEventListener("click",()=>{state.screen="lb";renderOverlay();});
       const cb=$("crateBtn");if(cb)cb.addEventListener("click",openCrate);
+      const gb=$("gambleBtn");if(gb)gb.addEventListener("click",gambleCrate);
     }
     el.overlay.classList.toggle("hidden",state.phase==="playing");
   }
-  function openCrate(){if(state.crateOpened)return;state.crateOpened=true;const roll=Math.random();let reward;if(roll<0.04)reward=500;else if(roll<0.2)reward=250;else reward=60+Math.floor(Math.random()*120);addCoins(reward);state.coinsRun+=reward;audio.power&&audio.power();toast((roll<0.04?"💎 JACKPOT! ":"🎁 ")+"+"+reward+"💰",roll<0.04?"#ff2bd6":"#ffd76a");renderOverlay();}
+  function openCrate(){if(state.crateOpened)return;state.crateOpened=true;
+    meta.crateDry=(meta.crateDry||0)+1;const roll=Math.random();const pity=meta.crateDry>=8;let tier,reward;
+    if(roll<0.03||(pity&&roll<0.5)){tier="LEGENDARY";reward=600;meta.crateDry=0;}
+    else if(roll<0.13){tier="EPIC";reward=300;meta.crateDry=0;}
+    else if(roll<0.42){tier="RARE";reward=160;}
+    else{tier="COMMON";reward=70+Math.floor(Math.random()*70);}
+    reward=Math.round(reward*COIN_MUL);state.crateReward=reward;state.crateTier=tier;state.gambled=false;
+    addCoins(reward);state.coinsRun+=reward;audio.power&&audio.power();
+    const col=tier==="LEGENDARY"?"#ff2bd6":tier==="EPIC"?"#b060ff":tier==="RARE"?"#66ffcc":"#ffd76a";
+    toast((tier==="LEGENDARY"?"💎 ":tier==="EPIC"?"🟣 ":tier==="RARE"?"🔷 ":"🎁 ")+tier+"  +"+reward+"💰",col);saveMeta();renderOverlay();}
+  function gambleCrate(){if(!state.crateReward||state.gambled)return;state.gambled=true;const amt=state.crateReward;
+    if(Math.random()<0.5){addCoins(amt);state.coinsRun+=amt;toast("🎉 DOUBLED!  +"+amt+"💰","#66ffcc");audio.power&&audio.power();}
+    else{meta.coins=Math.max(0,meta.coins-amt);state.coinsRun-=amt;saveMeta();updateMetaHud();toast("💥 Lost the gamble","#ff6a8a");audio.crash&&audio.crash();}
+    renderOverlay();}
 
   /* ============================ GARAGE ============================ */
   function openGarage(){state.screen="garage";state.garageTab=state.garageTab||"ships";renderOverlay();}
@@ -4471,14 +4542,18 @@ three/build/three.module.js:
     if(tab==="ships"){
       body='<div class="garage-grid">'+SKINS.map(sk=>{const owned=meta.owned.includes(sk.id);const sel=meta.skin===sk.id;const sw='linear-gradient(135deg,#'+("000000"+sk.a.toString(16)).slice(-6)+',#'+("000000"+sk.b.toString(16)).slice(-6)+')';
         return '<div class="skin'+(sel?" sel":"")+(owned?"":" lock")+'" data-sk="'+sk.id+'"><div class="sw" style="background:'+sw+'"></div><div class="nm">'+sk.name+'</div><div class="pr">'+(owned?(sel?"✓ Equipped":"Owned"):sk.price+"💰")+'</div></div>';}).join("")+'</div>';
-    } else {
+    } else if(tab==="up"){
       body=UPGRADES.map(u=>{const lvl=meta.up[u.id]||0;const max=lvl>=5;const cost=upCost(lvl);const can=!max&&meta.coins>=cost;
         const pips='<div class="pips">'+[0,1,2,3,4].map(i=>'<div class="pip'+(i<lvl?" on":"")+'"></div>').join("")+'</div>';
         return '<div class="uprow"><div class="ic">'+u.icon+'</div><div class="um"><div class="un">'+u.name+'</div><div class="ud">'+u.desc+'</div>'+pips+'</div><button class="ubtn'+(max?" max":"")+'" data-up="'+u.id+'"'+((!can&&!max)?" disabled":"")+'>'+(max?"MAX":cost+"💰")+'</button></div>';}).join("");
+    } else {
+      const got=meta.ach.length;
+      body='<div style="font-size:11px;color:#8892b0;margin-bottom:6px">'+got+'/'+ACH.length+' unlocked</div>'+ACH.map(a=>{const on=meta.ach.includes(a.id);
+        return '<div class="uprow" style="opacity:'+(on?1:0.55)+'"><div class="ic">'+(on?"🏆":"🔒")+'</div><div class="um"><div class="un">'+a.name+'</div><div class="ud">'+a.d+'</div></div><span style="font-size:11px;color:'+(on?"#66ffcc":"#7c8bb0")+';font-weight:700">'+(on?"✓":"+"+a.rew+"💰")+'</span></div>';}).join("");
     }
     el.card.innerHTML='<h1 class="gradient-text" style="font-size:26px">GARAGE</h1>'+
       '<div style="color:#ffd76a;font-weight:800;margin:2px 0 6px">💰 '+meta.coins.toLocaleString()+'</div>'+
-      '<div class="tabs"><span class="tab'+(tab==="ships"?" on":"")+'" data-tab="ships">Ships</span><span class="tab'+(tab==="up"?" on":"")+'" data-tab="up">Upgrades</span></div>'+
+      '<div class="tabs"><span class="tab'+(tab==="ships"?" on":"")+'" data-tab="ships">Ships</span><span class="tab'+(tab==="up"?" on":"")+'" data-tab="up">Upgrades</span><span class="tab'+(tab==="tr"?" on":"")+'" data-tab="tr">Trophies</span></div>'+
       body+
       '<div class="rowbtns"><button class="btn-gradient" id="backBtn">‹ Back</button></div>';
     el.card.querySelectorAll("[data-tab]").forEach(t=>t.addEventListener("click",()=>{state.garageTab=t.getAttribute("data-tab");renderGarage();}));
@@ -4486,26 +4561,44 @@ three/build/three.module.js:
     el.card.querySelectorAll("[data-up]").forEach(b=>b.addEventListener("click",()=>buyUpgrade(b.getAttribute("data-up"))));
     $("backBtn").addEventListener("click",closeGarage);
   }
+  function renderLeaderboard(){
+    const you=meta.name||"You";const rows=meta.lb.slice(0,12).map((e,i)=>{const me=!e.bot;
+      return '<div class="mrow" style="'+(me?'border:1px solid rgba(0,229,255,0.4)':'')+'"><span><b style="color:'+(i<3?"#ffd76a":"#cbd5e1")+'">#'+(i+1)+'</b> '+(me?'<span style="color:#8affff">'+e.name+'</span>':e.name)+'</span><span class="rw" style="color:#fff">'+e.score.toLocaleString()+'</span></div>';}).join("");
+    el.card.innerHTML='<h1 class="gradient-text" style="font-size:26px">RANKINGS</h1>'+
+      '<div style="font-size:11px;color:#8892b0;margin-bottom:8px">Your best: <b style="color:#ffd76a">'+meta.best.toLocaleString()+'</b> · Rank tier <b style="color:'+rankOf(meta.best).c+'">'+rankOf(meta.best).n+'</b></div>'+
+      '<div class="mlist">'+rows+'</div>'+
+      '<div class="rowbtns"><button class="btn-gradient" id="lbBack">‹ Back</button></div>';
+    $("lbBack").addEventListener("click",()=>{state.screen=null;renderOverlay();});
+  }
   function selectSkin(id){const sk=SKINS.find(s=>s.id===id);if(!sk)return;if(meta.owned.includes(id)){meta.skin=id;applySkin(id);saveMeta();audio.coin&&audio.coin();}else if(meta.coins>=sk.price){meta.coins-=sk.price;meta.owned.push(id);meta.skin=id;applySkin(id);saveMeta();updateMetaHud();checkAch();audio.power&&audio.power();toast("🚗 "+sk.name+" unlocked!","#00e5ff");}else{toast("Not enough coins","#ff6a8a");}renderGarage();}
   function buyUpgrade(id){const lvl=meta.up[id]||0;if(lvl>=5)return;const cost=upCost(lvl);if(meta.coins<cost){toast("Not enough coins","#ff6a8a");return;}meta.coins-=cost;meta.up[id]=lvl+1;applyUpgrades();saveMeta();updateMetaHud();checkAch();audio.power&&audio.power();toast("⬆️ "+UPGRADES.find(u=>u.id===id).name+" Lv"+(lvl+1),"#8affff");renderGarage();}
 
   function startGame(){
     if(!audio._playing){audio.start().catch(()=>{});}
     state.screen=null;applyUpgrades();
+    const d=epochDay();state.firstRunToday=(meta.lastRunDay!==d);meta.lastRunDay=d;saveMeta();
     state.phase="playing";state.t=0.5;state.lane=0;state.speed=CRUISE*0.5;state.steer=0;state.drift=0;state.nitroOn=0;state.nitro=0.35;state.driftYaw=0;
     state.score=0;state.takedowns=0;state.hp=MAXHP;state.lap=1;state.carY=0;state.vy=0;state.air=0;state.shake=0;state.invuln=1;state.hurtT=0;
     state.mult=1;state.chain=0;state.chainT=0;state.maxChain=0;state.driftTime=0;state.nitroTime=0;state.dist=0;state.topSpeed=0;state.coinsRun=0;state.newBest=false;state.crateOpened=false;
-    el.score.textContent="0";el.takedowns.textContent="💥 0";el.lap.textContent="1";el.pos.textContent="P1";
-    rollMissions();nitroPads.forEach(p=>p.used=0);placeRivals();renderOverlay();
+    state.driftHold=0;state.hitStop=0;state.hitThisRun=false;state.gambled=false;state.diff=1;
+    state.dcTask=(meta.dc&&meta.dc.def&&!meta.dc.done)?{ev:meta.dc.def.ev,goal:meta.dc.def.n,once:meta.dc.def.once,rew:meta.dc.def.rew,prog:0,done:false}:null;
+    el.score.textContent="0";el.takedowns.textContent="💥 0";el.lap.textContent=state.mode==="endless"?"∞":"1";el.pos.textContent="P1";
+    rollMissions();nitroPads.forEach(p=>p.used=0);coinPads.forEach(p=>{p.used=0;p.mesh.visible=true;});placeRivals();renderOverlay();
   }
   function endGame(won){
     if(state.phase!=="playing")return;
-    state.phase=won?"win":"over";comboBreak();
+    state.phase=won?"win":"over";comboBreak();state.hitStop=0;
+    if(won)missionEvent("win",1);
+    if(won&&!state.hitThisRun){missionEvent("clean",1);state.cleanBonus=Math.round(400*COIN_MUL);}else state.cleanBonus=0;
     meta.tot.races++;if(won)meta.tot.wins++;meta.tot.dist+=Math.round(state.dist);meta.tot.top=Math.max(meta.tot.top,Math.round(state.topSpeed));
     state.newBest=state.score>meta.best;if(state.newBest)meta.best=state.score;
-    const base=Math.floor(state.score/50)+state.takedowns*6+(won?160:0)+Math.floor(state.dist/300);
+    let base=Math.floor(state.score/50)+state.takedowns*6+(won?160:0)+Math.floor(state.dist/300)+state.cleanBonus;
+    if(state.firstRunToday){base=Math.round(base*2);state.dbl=true;}else state.dbl=false;
+    base=Math.round(base*COIN_MUL);
     state.coinsRun+=base;meta.coins+=base;
     state.xpGain=Math.floor(state.score/12)+state.takedowns*15+(won?120:0)+state.maxChain*10;gainXP(state.xpGain);
+    state.lbRank=submitScore(state.score);
+    const nr=rankOf(meta.best);const oldRank=meta.lastRank||0;const newRankIdx=RANKS.findIndex(x=>x[1]===nr.n);if(newRankIdx>oldRank){meta.lastRank=newRankIdx;state.rankUp=nr.n;}else state.rankUp=null;
     saveMeta();updateMetaHud();checkAch();updateMissionUI();
     audio.crash();boomFX(car.position.x,1,car.position.z,2);if(!won)splat(car.position.x,1,car.position.z,0xff5544,18);
     renderOverlay();
@@ -4524,6 +4617,7 @@ three/build/three.module.js:
 
     if(state.phase==="playing"){
       const s=state;
+      if(s.hitStop>0){s.hitStop-=dt;renderer.render(scene,camera);return;}   // brief freeze-frame on big takedowns
       // ---- throttle: always racing forward; nitro when held & available ----
       let boosting=(s.nitroOn||keys.has("arrowup")||keys.has("shift")||keys.has("w"))&&s.nitro>0.02;
       if(boosting){s.nitro=Math.max(0,s.nitro-dt*0.42);s.nitroTime+=dt;missionEvent("nitro",dt);}
@@ -4542,12 +4636,15 @@ three/build/three.module.js:
       // drift yaw (visual slide) + nitro charge + tyre smoke
       const yawTarget=drifting?-steer*0.5:( -steer*0.12 );
       s.driftYaw+=(yawTarget-s.driftYaw)*Math.min(1,dt*8);
-      if(drifting){s.driftTime+=dt;missionEvent("drift",dt);addNitro(dt*0.24*NITRO_MUL);if(Math.random()<0.6)puffSmoke(car.position.x-steer*0.6,0.3,car.position.z+1.6,0xbfc8dd);}
+      if(drifting){s.driftHold+=dt;s.driftTime+=dt;missionEvent("drift",dt);addNitro(dt*0.24*NITRO_MUL);if(Math.random()<0.6)puffSmoke(car.position.x-steer*0.6,0.3,car.position.z+1.6,0xbfc8dd);}
+      else{if(s.driftHold>1.3){const b=Math.round(120*Math.min(3,s.driftHold));addScore(b);addNitro(0.16);popup("PERFECT DRIFT +"+b,0x8affff,car.position.x,2.4,car.position.z);meta.tot.pdrift++;missionEvent("pdrift",1);audio.power&&audio.power();}s.driftHold=0;}
 
       // ---- advance along the circuit ----
       const adv=s.speed*dt;s.dist+=adv;missionEvent("dist",adv);
       const sl=segLen(Math.floor(s.t));s.t+=adv/Math.max(1,sl);
-      if(s.t>=NODES){s.t-=NODES;s.lap++;if(s.lap>LAPS_TOTAL){endGame(true);}else{toast("LAP "+s.lap+"/"+LAPS_TOTAL,"#ffd76a");el.lap.textContent=s.lap;}}
+      if(s.t>=NODES){s.t-=NODES;s.lap++;
+        if(s.mode!=="endless"&&s.lap>LAPS_TOTAL){endGame(true);}
+        else{s.diff=1+(s.lap-1)*0.1;if(s.mode==="endless"){addScore(300);toast("LAP "+s.lap+" · +300","#ffd76a");el.lap.textContent=s.lap;}else{toast("LAP "+s.lap+"/"+LAPS_TOTAL,"#ffd76a");el.lap.textContent=s.lap;}}}
 
       // ---- ramps: launch into the air ----
       for(const ri of ramps){let d=Math.abs(((s.t-ri+NODES)%NODES));if(d>NODES/2)d=NODES-d;if(d<0.6&&s.air<=0&&Math.abs(s.lane)<ROAD_HW){s.air=1;s.vy=8+ s.speed*0.05;audio.power();toast("BIG AIR!","#00e5ff");meta.tot.air++;missionEvent("air",1);checkAch();}}
@@ -4555,6 +4652,8 @@ three/build/three.module.js:
 
       // ---- nitro pads ----
       for(const p of nitroPads){let d=Math.abs(((s.t-p.idx+NODES)%NODES));if(d>NODES/2)d=NODES-d;if(d<0.7&&!p.used){p.used=1;addNitro(0.3*NITRO_MUL);audio.coin();setTimeout(()=>p.used=0,4000);}}
+      // ---- coin pickups ----
+      for(const p of coinPads){if(p.mesh.visible)p.mesh.rotation.z+=dt*3;let d=Math.abs(((s.t-p.idx+NODES)%NODES));if(d>NODES/2)d=NODES-d;if(d<0.7&&!p.used&&Math.abs(p.lane-s.lane)<3.4){p.used=1;p.mesh.visible=false;const c=Math.round((14+Math.floor(Math.random()*16))*COIN_MUL);addCoins(c);s.coinsRun+=c;popup("+"+c+"💰",0xffd76a,p.mesh.position.x,2,p.mesh.position.z);audio.coin&&audio.coin();setTimeout(()=>{if(state.phase==="playing"){p.used=0;p.mesh.visible=true;}},6000);}}
       // ---- combo chain decay ----
       if(s.chainT>0){s.chainT-=dt;if(s.chainT<=0)comboBreak();}
 
@@ -4565,15 +4664,22 @@ three/build/three.module.js:
       if(carParts.flames)for(const fl of carParts.flames){const sc=0.35+s.boostVis*1.8+Math.sin(time*40)*0.06;fl.scale.set(1,sc,1);}
 
       // ---- rivals ----
-      let ahead=0;for(const r of rivals){if(!r.alive){ahead++;continue;}r.t=(r.t+(r.spd*dt)/Math.max(1,segLen(Math.floor(r.t))))%NODES;const rn=trackAt(r.t);r.mesh.position.set(rn.x+rn.nx*r.lane,0.1,rn.z+rn.nz*r.lane);r.mesh.rotation.y=Math.atan2(-rn.tx,-rn.tz);if(r.mesh.userData.flame)r.mesh.userData.flame.scale.set(1,1+Math.sin(time*30+r.ph)*0.3,1);
-        // relative position on track for collision + standings
+      const rubberBase=CRUISE*s.diff;
+      for(const r of rivals){if(!r.alive){continue;}
+        let dT0=((r.t-s.t+NODES)%NODES);if(dT0>NODES/2)dT0-=NODES;
+        const rb=dT0<0?1.2:(dT0>12?0.9:1.0);            // rubber-band: trailing rivals catch up
+        r.spd=rubberBase*(0.6+((r.ph%1))*0.16)*rb;
+        r.t=(r.t+(r.spd*dt)/Math.max(1,segLen(Math.floor(r.t))))%NODES;
+        const rn=trackAt(r.t);r.mesh.position.set(rn.x+rn.nx*r.lane,0.1,rn.z+rn.nz*r.lane);r.mesh.rotation.y=Math.atan2(-rn.tx,-rn.tz);if(r.mesh.userData.flame)r.mesh.userData.flame.scale.set(1,1+Math.sin(time*30+r.ph)*0.3,1);
         let dT=((r.t-s.t+NODES)%NODES);if(dT>NODES/2){dT-=NODES;}
-        if(dT<0)ahead++;                                   // player is ahead of this rival's lap-position? (approx)
-        if(Math.abs(dT)<0.9&&Math.abs(r.lane-s.lane)<3.0){
+        const laneGap=Math.abs(r.lane-s.lane);
+        if(Math.abs(dT)<0.9&&laneGap<3.0){
           if(s.boostVis>0.3||s.speed>CRUISE*1.05){takedown(r,r.mesh.position.x,r.mesh.position.z);}
           else{hurt();r.lane+=(s.lane<r.lane?1:-1)*3;}
-        }
+        } else if(Math.abs(dT)<0.7&&laneGap<4.6&&!r.nm){r.nm=true;addScore(90);addNitro(0.08);popup("CLOSE! +90",0xffe08a,r.mesh.position.x,2,r.mesh.position.z);meta.tot.near++;missionEvent("near",1);}
+        if(Math.abs(dT)>3)r.nm=false;
       }
+      let ahead=0;for(const r of rivals){if(!r.alive)continue;let dT=((r.t-s.t+NODES)%NODES);if(dT>NODES/2)dT-=NODES;if(dT<0)ahead++;}
       el.pos.textContent="P"+(1+ (rivals.filter(r=>r.alive).length - rivals.filter(r=>{let dT=((r.t-s.t+NODES)%NODES);return r.alive&&dT>0&&dT<NODES/2;}).length));
 
       // ---- HUD ----
