@@ -123,13 +123,39 @@
   .ubtn { font-size:12px; font-weight:800; padding:8px 12px; border-radius:10px; border:1px solid rgba(0,229,255,0.5); background:rgba(0,229,255,0.1); color:#8affff; cursor:pointer; white-space:nowrap; }
   .ubtn:disabled { opacity:.4; cursor:default; }
   .ubtn.max { border-color:rgba(102,255,204,0.5); color:#66ffcc; background:rgba(102,255,204,0.08); }
-  .tabs { display:flex; gap:8px; justify-content:center; margin:10px 0; }
+  .tabs { display:flex; gap:8px; justify-content:center; margin:10px 0; flex-wrap:wrap; }
   .tab { font-size:12px; font-weight:700; padding:7px 16px; border-radius:999px; cursor:pointer; color:#94a3b8; background:rgba(255,255,255,0.04); }
   .tab.on { color:#fff; background:linear-gradient(135deg,#4f6ef7,#8b5cf6); }
+
+  /* rotate-to-landscape prompt (this game is designed for landscape) */
+  .rotate { position:absolute; inset:0; z-index:200; display:none; flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; padding:32px; background:#05030f; }
+  .rotate .ic { font-size:58px; animation:rotp 2.2s ease-in-out infinite; }
+  @keyframes rotp { 0%,38%{transform:rotate(0)} 58%,100%{transform:rotate(90deg)} }
+  .rotate h2 { margin:0; font-size:22px; font-weight:900; }
+  .rotate p { margin:0; color:#94a3b8; font-size:14px; line-height:1.6; }
+  @media (orientation:portrait) { .rotate { display:flex; } }
+
+  /* landscape / short-height tuning */
+  @media (orientation:landscape) and (max-height:560px) {
+    .overlay { align-items:flex-start; padding:10px; }
+    .card { max-height:96vh; overflow:auto; padding:16px 22px; max-width:520px; }
+    .card h1 { font-size:24px; margin-bottom:2px; }
+    .card p.lead { font-size:12.5px; margin-bottom:10px; }
+    .row, .rowbtns { margin:6px 0; } .mlist { margin:6px 0; gap:4px; } .mrow { padding:5px 9px; }
+    .xpwrap { margin:8px 0 2px; }
+    .missions { top:calc(env(safe-area-inset-top) + 6px); width:min(42vw,300px); gap:4px; }
+    .m-chip { font-size:10px; padding:4px 9px; }
+    .minimap { width:94px; height:94px; bottom:calc(env(safe-area-inset-bottom) + 86px); }
+    .gauge { min-width:104px; padding:6px 11px; } .gauge .v { font-size:22px; }
+    .wheel { width:104px; height:104px; } .wheel .knob { width:46px; height:46px; }
+    .act-btn { width:64px; height:64px; font-size:9px; } .act-btn .rk { font-size:19px; }
+    .combo { top:20%; } .combo .cx { font-size:28px; }
+  }
 </style>
 </head>
 <body>
 <div id="app">
+  <div class="rotate"><div class="ic">📱</div><h2 class="gradient-text">Rotate to landscape</h2><p>Moon Racer plays in landscape.<br>가로로 돌려서 플레이하세요 🏁</p></div>
   <div class="vignette"></div>
   <div class="speedblur" id="speedBlur"></div>
   <div class="boost-flash" id="boostFlash"></div>
@@ -4608,6 +4634,7 @@ three/build/three.module.js:
   const clock=new THREE.Clock();
   function onResize(){const w=app.clientWidth||window.innerWidth||360,h=app.clientHeight||window.innerHeight||640;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();}
   window.addEventListener("resize",onResize);
+  window.addEventListener("orientationchange",()=>{setTimeout(onResize,120);});
   let miniAcc=0;
 
   function animate(){
