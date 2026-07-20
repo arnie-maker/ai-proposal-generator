@@ -46,6 +46,17 @@
   .nlabel { font-size:9px; letter-spacing:.14em; text-transform:uppercase; color:#8affff; margin-top:6px; }
   .nfill { height:100%; width:0%; background:linear-gradient(90deg,#00e5ff,#a0f6ff); }
   .nfull .nfill { animation:nglow .5s ease-in-out infinite alternate; }
+  .odfill { height:100%; width:0%; background:linear-gradient(90deg,#ffd76a,#ff2bd6); }
+  .odfull .odfill { animation:nglow .4s ease-in-out infinite alternate; }
+  .manualonly { display:none; }
+  body.manual .manualonly { display:flex; }
+  body.tiltmode .wheel { display:none; }
+  .gas-btn { color:#8dff9a; border-color:rgba(80,240,120,0.8); background:radial-gradient(circle at 50% 35%, rgba(60,220,90,0.34), rgba(4,20,8,0.85)); box-shadow:0 0 24px rgba(60,220,90,0.32); }
+  .gas-btn.active { box-shadow:0 0 42px rgba(60,220,90,0.75); }
+  .brake-btn { color:#ffb0b0; border-color:rgba(255,90,90,0.8); background:radial-gradient(circle at 50% 35%, rgba(255,70,70,0.3), rgba(20,6,6,0.85)); box-shadow:0 0 22px rgba(255,70,70,0.28); }
+  .draftind { pointer-events:none; position:absolute; left:50%; top:32%; transform:translateX(-50%); font-size:16px; font-weight:900; letter-spacing:.1em; color:#8affff; text-shadow:0 0 14px rgba(0,229,255,0.7); opacity:0; transition:opacity .15s; }
+  .draftind.on { opacity:1; }
+  .tiltcal { display:none; }
   @keyframes nglow { to { box-shadow:0 0 12px rgba(0,229,255,0.9); } }
 
   .actions { pointer-events:none; position:absolute; right:16px; bottom:calc(env(safe-area-inset-bottom) + 18px); display:flex; align-items:flex-end; gap:12px; }
@@ -186,15 +197,20 @@
     <div class="v" id="spVal">0</div><div class="u">km/h</div>
     <div class="bar"><div class="spfill" id="spFill"></div></div>
     <div class="nlabel">Nitro</div><div class="bar" id="nbar"><div class="nfill" id="nFill"></div></div>
+    <div class="nlabel" style="color:#ffd76a">Overdrive</div><div class="bar" id="odbar"><div class="odfill" id="odFill"></div></div>
   </div>
 
   <div class="popups" id="popups"></div>
   <div class="toasts" id="toasts"></div>
+  <div class="draftind" id="draftInd">DRAFT +</div>
 
   <div class="wheel" id="wheel"><div class="knob" id="wheelKnob"></div><div class="wl">◀ steer ▶</div></div>
+  <div class="tiltcal" id="tiltCal"></div>
   <div class="actions">
     <button class="act-btn fire-btn" id="fireBtn"><span class="rk">🔫</span>FIRE</button>
+    <button class="act-btn brake-btn manualonly" id="brakeBtn"><span class="rk">🛑</span>BRAKE</button>
     <button class="act-btn drift-btn" id="driftBtn"><span class="rk">🌀</span>DRIFT</button>
+    <button class="act-btn gas-btn manualonly" id="gasBtn"><span class="rk">⛽</span>GAS</button>
     <button class="act-btn nitro-btn" id="nitroBtn"><span class="rk">🔥</span>NITRO</button>
   </div>
 
@@ -4202,6 +4218,7 @@ three/build/three.module.js:
   const NODES=520, ROAD_HW=13;             // circuit sample count + road half-width
   const BASE={cruise:98,nitroSpd:178,accel:95,turn:30,hp:3};
   let CRUISE=BASE.cruise, NITRO_SPD=BASE.nitroSpd, ACCEL=BASE.accel, TURN_LANE=BASE.turn, MAXHP=BASE.hp;
+  const REV_SPD=-26, OVER_SPD=215, OD_TIME=5;   // reverse, overdrive top speed, overdrive duration
   const CAM_DIST=11, CAM_H=4.6, LOOK_AHEAD=20;
   const LAPS_TOTAL=3;
   const SKINS=[
@@ -4311,7 +4328,8 @@ three/build/three.module.js:
     m.up=Object.assign({speed:0,accel:0,handling:0,nitro:0,armor:0},m.up||{});m.ach=m.ach||[];
     m.tot=Object.assign({races:0,td:0,dist:0,wins:0,air:0,top:0,near:0,pdrift:0},m.tot||{});m.firstDone=!!m.firstDone;
     m.name=m.name||"";m.prestige=m.prestige||0;m.freeze=(m.freeze==null?1:m.freeze);m.lb=m.lb||null;m.spinDay=m.spinDay||0;
-    m.dc=m.dc||{day:0,done:false,def:null};m.crateDry=m.crateDry||0;m.lastRank=m.lastRank||0;return m;}
+    m.dc=m.dc||{day:0,done:false,def:null};m.crateDry=m.crateDry||0;m.lastRank=m.lastRank||0;
+    m.throttle=m.throttle||"auto";m.steerMode=m.steerMode||"wheel";return m;}
   const meta=loadMeta();
   function saveMeta(){try{LS.set("save",JSON.stringify(meta));}catch(e){}}
   const epochDay=()=>Math.floor(Date.now()/86400000);
@@ -4322,7 +4340,13 @@ three/build/three.module.js:
   if(!meta.lb){meta.lb=[];const bots=["ZYX-9","Nova","Vex","Pulsar","Onyx","Quark","Sable","Rook","Ceres","Talon"];for(let i=0;i<10;i++)meta.lb.push({name:bots[i],score:Math.round(4000+Math.pow(1.9,10-i)*260+Math.random()*800),bot:true});meta.lb.sort((a,b)=>b.score-a.score);saveMeta();}
   const el={score:$("score"),best:$("best"),lap:$("lap"),pos:$("pos"),takedowns:$("takedowns"),soundBtn:$("soundBtn"),
     spVal:$("spVal"),spFill:$("spFill"),nFill:$("nFill"),nbar:$("nbar"),boostFlash:$("boostFlash"),hurtFlash:$("hurtFlash"),speedBlur:$("speedBlur"),
-    popups:$("popups"),toasts:$("toasts"),overlay:$("overlay"),card:$("card"),wheel:$("wheel"),wheelKnob:$("wheelKnob"),nitroBtn:$("nitroBtn"),driftBtn:$("driftBtn"),fireBtn:$("fireBtn"),miniCv:$("miniCv")};
+    popups:$("popups"),toasts:$("toasts"),overlay:$("overlay"),card:$("card"),wheel:$("wheel"),wheelKnob:$("wheelKnob"),nitroBtn:$("nitroBtn"),driftBtn:$("driftBtn"),fireBtn:$("fireBtn"),
+    gasBtn:$("gasBtn"),brakeBtn:$("brakeBtn"),odFill:$("odFill"),odbar:$("odbar"),draftInd:$("draftInd"),miniCv:$("miniCv")};
+  let tiltOn=false,tiltZero=null;
+  function enableTilt(){if(tiltOn)return;const go=()=>{tiltOn=true;window.addEventListener("deviceorientation",(e)=>{if(meta.steerMode!=="tilt"||e.gamma==null)return;if(tiltZero==null)tiltZero=e.gamma;let g=(e.gamma-tiltZero);state.steer=Math.max(-1,Math.min(1,g/22));});};
+    try{if(typeof DeviceOrientationEvent!=="undefined"&&DeviceOrientationEvent.requestPermission){DeviceOrientationEvent.requestPermission().then(r=>{if(r==="granted")go();}).catch(()=>{});}else go();}catch(e){}}
+  function applyControlMode(){document.body.classList.toggle("manual",meta.throttle==="manual");document.body.classList.toggle("tiltmode",meta.steerMode==="tilt");tiltZero=null;if(meta.steerMode==="tilt")enableTilt();}
+  applyControlMode();
   el.best.textContent=meta.best.toLocaleString();
   el.coinHud=$("coinHud");el.lvHud=$("lvHud");el.missions=$("missions");el.combo=$("combo");
   function updateMetaHud(){if(el.coinHud)el.coinHud.textContent="💰 "+meta.coins.toLocaleString();if(el.lvHud)el.lvHud.textContent="LV "+meta.level;}
@@ -4352,7 +4376,8 @@ three/build/three.module.js:
   const state={phase:"ready",t:0,lane:0,speed:0,steer:0,drift:0,nitroOn:0,nitro:0,driftYaw:0,
     score:0,takedowns:0,hp:3,lap:1,carY:0,vy:0,air:0,shake:0,hurtT:0,invuln:0,boostVis:0,
     mult:1,chain:0,chainT:0,maxChain:0,driftTime:0,nitroTime:0,dist:0,topSpeed:0,missions:[],coinsRun:0,
-    mode:"circuit",dcTask:null,driftHold:0,hitStop:0,crateReward:0,crateTier:"",gambled:false,hitThisRun:false,diff:1,screen:null,garageTab:"ships",firing:0,fireTimer:0};
+    mode:"circuit",dcTask:null,driftHold:0,hitStop:0,crateReward:0,crateTier:"",gambled:false,hitThisRun:false,diff:1,screen:null,garageTab:"ships",firing:0,fireTimer:0,
+    gas:0,braking:0,od:0,odActive:0,draft:0,pw:{shield:0,x2:0,magnet:0},started:0,startBoost:0};
   const audio=new CyberpunkAudio();
 
   /* ============================ RENDERER / SCENE ============================ */
@@ -4399,7 +4424,7 @@ three/build/three.module.js:
     let acc=0;for(let i=0;i<NODES;i++){cumLen.push(acc);const n=track[(i+1)%NODES];acc+=Math.hypot(n.x-track[i].x,n.z-track[i].z);}trackLen=acc;
   })();
   const NODE_SP=trackLen/NODES;
-  function segLen(i){const a=track[i%NODES],b=track[(i+1)%NODES];return Math.hypot(b.x-a.x,b.z-a.z);}
+  function segLen(i){i=((Math.floor(i)%NODES)+NODES)%NODES;const a=track[i],b=track[(i+1)%NODES];return Math.hypot(b.x-a.x,b.z-a.z);}
   function trackAt(idx){idx=((idx%NODES)+NODES)%NODES;const i=Math.floor(idx),f=idx-i;const a=track[i],b=track[(i+1)%NODES];let tx=a.tx+(b.tx-a.tx)*f,tz=a.tz+(b.tz-a.tz)*f;const L=Math.hypot(tx,tz)||1;tx/=L;tz/=L;return {x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f,z:a.z+(b.z-a.z)*f,tx,tz,nx:-tz,nz:tx};}
   function slopeAt(idx){return (trackAt(idx+2).y-trackAt(idx-2).y)/(4*NODE_SP);}
 
@@ -4444,6 +4469,16 @@ three/build/three.module.js:
   // floating coin pickups along the track
   const coinPads=[];const coinGeo=new THREE.CylinderGeometry(0.7,0.7,0.14,16);const coinMat=new THREE.MeshStandardMaterial({color:0xffd76a,emissive:0xffb43a,emissiveIntensity:1.8,metalness:0.6,roughness:0.3});
   for(let k=0;k<18;k++){const idx=Math.floor((k+0.62)/18*NODES);if(ramps.includes(idx))continue;const n=track[idx];const lane=(Math.random()-0.5)*ROAD_HW*1.3;const m=new THREE.Mesh(coinGeo,coinMat);m.rotation.x=Math.PI/2;m.position.set(n.x+n.nx*lane,n.y+1.3,n.z+n.nz*lane);scene.add(m);coinPads.push({idx,lane,mesh:m,used:0});}
+  // on-track power-ups: shield / x2 / magnet / repair / overdrive
+  const PW_TYPES=[{t:"shield",c:0x66ccff},{t:"x2",c:0x66ffcc},{t:"magnet",c:0xb060ff},{t:"repair",c:0x66ff88},{t:"od",c:0xffd76a}];
+  const powerups=[];const pwGeo=new THREE.OctahedronGeometry(1.0,0);
+  for(let k=0;k<10;k++){const idx=Math.floor((k+0.15)/10*NODES);if(ramps.includes(idx))continue;const n=track[idx];const spec=PW_TYPES[k%PW_TYPES.length];const mat=new THREE.MeshStandardMaterial({color:spec.c,emissive:spec.c,emissiveIntensity:2.2,metalness:0.4,roughness:0.25});const grp=new THREE.Group();const gem=new THREE.Mesh(pwGeo,mat);grp.add(gem);const ring=new THREE.Mesh(new THREE.TorusGeometry(1.5,0.1,8,24),new THREE.MeshBasicMaterial({color:spec.c,fog:false}));ring.rotation.x=Math.PI/2;grp.add(ring);grp.position.set(n.x,n.y+1.8,n.z);scene.add(grp);powerups.push({idx,type:spec.t,mesh:grp,gem,ring,used:0});}
+  function applyPowerup(type){const s=state;if(type==="shield"){s.pw.shield=1;toast("🛡️ SHIELD","#66ccff");}
+    else if(type==="x2"){s.pw.x2=8;toast("✕2 SCORE 8s","#66ffcc");}
+    else if(type==="magnet"){s.pw.magnet=8;toast("🧲 MAGNET 8s","#b060ff");}
+    else if(type==="repair"){s.hp=Math.min(MAXHP,s.hp+1);toast("🔧 REPAIR","#66ff88");}
+    else if(type==="od"){s.od=Math.min(1,s.od+0.4);toast("⚡ Overdrive +","#ffd76a");}
+    audio.power&&audio.power();}
 
   // start/finish gate
   (function(){const n=track[0];const a=Math.atan2(n.tx,n.tz);for(const s of[1,-1]){const pillar=new THREE.Mesh(new THREE.BoxGeometry(1.2,10,1.2),new THREE.MeshStandardMaterial({color:0xffd76a,emissive:0xffb43a,emissiveIntensity:2}));pillar.position.set(n.x+n.nx*s*(ROAD_HW+1),n.y+5,n.z+n.nz*s*(ROAD_HW+1));scene.add(pillar);}const bar=new THREE.Mesh(new THREE.BoxGeometry(ROAD_HW*2+4,1.2,0.6),new THREE.MeshStandardMaterial({color:0xffd76a,emissive:0xffb43a,emissiveIntensity:1.6}));bar.position.set(n.x,n.y+9.5,n.z);bar.rotation.y=a;scene.add(bar);})();
@@ -4510,18 +4545,18 @@ three/build/three.module.js:
   function popup(text,colorHex,wx,wy,wz){const v=new THREE.Vector3(wx,wy||2,wz).project(camera);if(v.z>1)return;const sx=(v.x*0.5+0.5)*app.clientWidth,sy=(-v.y*0.5+0.5)*app.clientHeight;const d=document.createElement("div");d.className="pop";d.textContent=text;d.style.left=sx+"px";d.style.top=sy+"px";d.style.color="#"+("000000"+(colorHex||0xffffff).toString(16)).slice(-6);d.style.fontSize="16px";el.popups.appendChild(d);setTimeout(()=>d.remove(),1000);}
   function toast(text,color){const d=document.createElement("div");d.className="toast glass";d.textContent=text;d.style.color=color||"#fff";el.toasts.appendChild(d);setTimeout(()=>d.remove(),1900);}
   function shakeAdd(a){state.shake=Math.min(0.8,state.shake+a);}
-  function addScore(n){state.score+=n;el.score.textContent=state.score.toLocaleString();if(state.score>meta.best)el.best.textContent=state.score.toLocaleString();}
+  function addScore(n){n=Math.round(n*(state.odActive>0?2:1)*(state.pw&&state.pw.x2>0?2:1));state.score+=n;el.score.textContent=state.score.toLocaleString();if(state.score>meta.best)el.best.textContent=state.score.toLocaleString();}
   function addNitro(n){state.nitro=Math.min(1,state.nitro+n);}
   function takedown(r,wx,wz){if(!r.alive)return;r.alive=false;
     const wy=(r.mesh.position.y||1);carExplode(wx,wy,wz,0x7dff4a);
     // knock the rival flying away, tumbling, before it disappears
     const dx=r.mesh.position.x-car.position.x, dz=r.mesh.position.z-car.position.z, d=Math.hypot(dx,dz)||1;
     r.launch={t:0,vx:dx/d*18+(Math.random()-0.5)*12,vy:15+Math.random()*9,vz:dz/d*18+(Math.random()-0.5)*12,rx:(Math.random()-0.5)*16,rz:(Math.random()-0.5)*16};r.mesh.visible=true;
-    state.takedowns++;el.takedowns.textContent="💥 "+state.takedowns;comboHit();const pts=Math.round(500*state.mult);addScore(pts);addNitro(0.3*NITRO_MUL);popup("+"+pts+(state.chain>1?" x"+state.chain:""),0x7dff4a,wx,2,wz);
+    state.takedowns++;el.takedowns.textContent="💥 "+state.takedowns;comboHit();const pts=Math.round(500*state.mult);addScore(pts);addNitro(0.3*NITRO_MUL);if(state.odActive<=0)state.od=Math.min(1,state.od+0.12);popup("+"+pts+(state.chain>1?" x"+state.chain:""),0x7dff4a,wx,2,wz);
     if(r.name)popup("💥 "+r.name,0xffffff,wx,3.4,wz);state.hitStop=state.chain>=3?0.07:0.04;
     meta.tot.td++;missionEvent("td",1);checkAch();
     setTimeout(()=>{if(state.phase==="playing"){r.t=(state.t+NODES*0.5)%NODES;r.lane=(Math.random()-0.5)*ROAD_HW*1.2;r.alive=true;r.mesh.visible=true;r.nm=false;r.launch=null;r.hp=RIVAL_HP;}},3500);}
-  function hurt(){if(state.invuln>0)return;state.hp--;state.hitThisRun=true;state.invuln=1.3;state.hurtT=0.4;state.speed*=0.5;comboBreak();audio.crash();shakeAdd(0.5);if(state.hp<=0)endGame(false);}
+  function hurt(){if(state.invuln>0||state.odActive>0)return;if(state.pw&&state.pw.shield>0){state.pw.shield=0;state.invuln=1.0;shakeAdd(0.3);toast("🛡️ Shield absorbed it!","#66ccff");return;}state.hp--;state.hitThisRun=true;state.invuln=1.3;state.hurtT=0.4;state.speed*=0.5;comboBreak();audio.crash();shakeAdd(0.5);if(state.hp<=0)endGame(false);}
 
   /* ===== session missions (Zeigarnik open loops) ===== */
   function rollMissions(){const pool=MISSION_POOL.slice();const pick=[];for(let i=0;i<3&&pool.length;i++){const m=pool.splice(Math.floor(Math.random()*pool.length),1)[0];pick.push({id:m.id,ev:m.ev,text:m.text,rew:m.rew,once:m.once,goal:m.n(),prog:0,done:false});}state.missions=pick;updateMissionUI();}
@@ -4551,6 +4586,8 @@ three/build/three.module.js:
   holdBtn(el.nitroBtn,()=>state.nitroOn=1,()=>state.nitroOn=0);
   holdBtn(el.driftBtn,()=>state.drift=1,()=>state.drift=0);
   holdBtn(el.fireBtn,()=>state.firing=1,()=>state.firing=0);
+  holdBtn(el.gasBtn,()=>state.gas=1,()=>state.gas=0);
+  holdBtn(el.brakeBtn,()=>state.braking=1,()=>state.braking=0);
   el.soundBtn.addEventListener("click",()=>{if(!audio._playing)audio.start();const m=audio.toggleMute();el.soundBtn.textContent=m?"🔇":"🔊";});
 
   /* ============================ MINIMAP ============================ */
@@ -4566,6 +4603,7 @@ three/build/three.module.js:
     if(state.screen==="garage"){renderGarage();el.overlay.classList.remove("hidden");return;}
     const rk=rankOf(meta.best);
     if(state.screen==="lb"){renderLeaderboard();el.overlay.classList.remove("hidden");return;}
+    if(state.screen==="set"){renderSettings();el.overlay.classList.remove("hidden");return;}
     if(state.phase==="ready"){
       if(!state.missions.length)rollMissions();
       const nm=meta.name?('<span style="color:#9fd8ff"> · '+meta.name+'</span>'):'';
@@ -4583,10 +4621,11 @@ three/build/three.module.js:
         (spinAvail?'<button class="tab" id="spinBtn" style="margin:6px 0;padding:9px 16px;color:#ffd76a;border:1px solid rgba(255,215,106,0.5)">🎡 Daily Spin — free coins!</button>':'')+
         '<div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#7c8bb0;margin-top:8px">Session goals</div>'+missionPreview()+
         modeBtns+
-        '<div class="rowbtns"><button class="btn-gradient" id="startBtn">▶ Race</button><button class="tab" id="garageBtn" style="padding:12px 16px">🏁 Garage</button><button class="tab" id="lbBtn" style="padding:12px 16px">🏆 Ranks</button>'+prestigeBtn+'</div>'+
+        '<div class="rowbtns"><button class="btn-gradient" id="startBtn">▶ Race</button><button class="tab" id="garageBtn" style="padding:12px 16px">🏁 Garage</button><button class="tab" id="lbBtn" style="padding:12px 16px">🏆 Ranks</button><button class="tab" id="setBtn" style="padding:12px 16px">⚙️ Controls</button>'+prestigeBtn+'</div>'+
         '<div class="hint">Drag wheel to steer · 🔥 nitro · 🌀 drift corners · take down rivals<br><span class="kbd-hint">← → steer · ↑/Shift nitro · ↓/Space drift</span></div>';
       $("startBtn").addEventListener("click",startGame);$("garageBtn").addEventListener("click",openGarage);
       $("lbBtn").addEventListener("click",()=>{state.screen="lb";renderOverlay();});
+      $("setBtn").addEventListener("click",()=>{state.screen="set";renderOverlay();});
       $("nameBtn").addEventListener("click",setCallsign);
       const sp=$("spinBtn");if(sp)sp.addEventListener("click",()=>{dailySpin();});
       const pr=$("prestBtn");if(pr)pr.addEventListener("click",doPrestige);
@@ -4657,6 +4696,19 @@ three/build/three.module.js:
     el.card.querySelectorAll("[data-up]").forEach(b=>b.addEventListener("click",()=>buyUpgrade(b.getAttribute("data-up"))));
     $("backBtn").addEventListener("click",closeGarage);
   }
+  function renderSettings(){
+    const th=meta.throttle,sm=meta.steerMode;
+    el.card.innerHTML='<h1 class="gradient-text" style="font-size:26px">CONTROLS</h1>'+
+      '<div style="text-align:left;margin:14px 0"><div style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#8892b0;margin-bottom:6px">Acceleration</div>'+
+      '<div class="tabs" style="justify-content:flex-start"><span class="tab'+(th==="auto"?" on":"")+'" data-th="auto">🚀 Auto-drive</span><span class="tab'+(th==="manual"?" on":"")+'" data-th="manual">⛽ Manual (gas/brake)</span></div>'+
+      '<div style="font-size:11px;color:#7c8bb0;margin-top:4px">Auto-drive keeps you moving so you focus on steering & tricks (recommended). Manual adds a GAS + BRAKE pedal.</div></div>'+
+      '<div style="text-align:left;margin:14px 0"><div style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#8892b0;margin-bottom:6px">Steering</div>'+
+      '<div class="tabs" style="justify-content:flex-start"><span class="tab'+(sm==="wheel"?" on":"")+'" data-sm="wheel">🎡 Wheel (drag)</span><span class="tab'+(sm==="tilt"?" on":"")+'" data-sm="tilt">📱 Tilt phone</span></div></div>'+
+      '<div class="rowbtns"><button class="btn-gradient" id="setBack">‹ Back</button></div>';
+    el.card.querySelectorAll("[data-th]").forEach(t=>t.addEventListener("click",()=>{meta.throttle=t.getAttribute("data-th");saveMeta();applyControlMode();renderSettings();}));
+    el.card.querySelectorAll("[data-sm]").forEach(t=>t.addEventListener("click",()=>{meta.steerMode=t.getAttribute("data-sm");saveMeta();if(meta.steerMode==="tilt")enableTilt();renderSettings();}));
+    $("setBack").addEventListener("click",()=>{state.screen=null;renderOverlay();});
+  }
   function renderLeaderboard(){
     const you=meta.name||"You";const rows=meta.lb.slice(0,12).map((e,i)=>{const me=!e.bot;
       return '<div class="mrow" style="'+(me?'border:1px solid rgba(0,229,255,0.4)':'')+'"><span><b style="color:'+(i<3?"#ffd76a":"#cbd5e1")+'">#'+(i+1)+'</b> '+(me?'<span style="color:#8affff">'+e.name+'</span>':e.name)+'</span><span class="rw" style="color:#fff">'+e.score.toLocaleString()+'</span></div>';}).join("");
@@ -4677,6 +4729,7 @@ three/build/three.module.js:
     state.score=0;state.takedowns=0;state.hp=MAXHP;state.lap=1;state.carY=0;state.vy=0;state.air=0;state.shake=0;state.invuln=1;state.hurtT=0;
     state.mult=1;state.chain=0;state.chainT=0;state.maxChain=0;state.driftTime=0;state.nitroTime=0;state.dist=0;state.topSpeed=0;state.coinsRun=0;state.newBest=false;state.crateOpened=false;
     state.driftHold=0;state.hitStop=0;state.hitThisRun=false;state.gambled=false;state.diff=1;state.firing=0;state.fireTimer=0;bolts.forEach(b=>{b.active=false;b.mesh.visible=false;});
+    state.gas=0;state.braking=0;state.od=0;state.odActive=0;state.draft=0;state.pw={shield:0,x2:0,magnet:0};applyControlMode();powerups.forEach(p=>{p.used=0;p.mesh.visible=true;});
     state.dcTask=(meta.dc&&meta.dc.def&&!meta.dc.done)?{ev:meta.dc.def.ev,goal:meta.dc.def.n,once:meta.dc.def.once,rew:meta.dc.def.rew,prog:0,done:false}:null;
     el.score.textContent="0";el.takedowns.textContent="💥 0";el.lap.textContent=state.mode==="endless"?"∞":"1";el.pos.textContent="P1";
     car.visible=true;resetTrail();rollMissions();nitroPads.forEach(p=>p.used=0);coinPads.forEach(p=>{p.used=0;p.mesh.visible=true;});placeRivals();renderOverlay();
@@ -4720,12 +4773,27 @@ three/build/three.module.js:
     if(state.phase==="playing"){
       const s=state;
       if(s.hitStop>0){s.hitStop-=dt;renderScene();return;}   // brief freeze-frame on big takedowns
-      // ---- throttle: always racing forward; nitro when held & available ----
-      let boosting=(s.nitroOn||keys.has("arrowup")||keys.has("shift")||keys.has("w"))&&s.nitro>0.02;
+      // ---- overdrive timer ----
+      if(s.odActive>0){s.odActive-=dt;s.invuln=Math.max(s.invuln,0.1);if(s.odActive<=0){s.od=0;toast("Overdrive ended","#8892b0");}}
+      // ---- throttle: auto-cruise or manual gas/brake; nitro & overdrive stack on top ----
+      const manual=meta.throttle==="manual";
+      const nitroKey=s.nitroOn||keys.has("shift")||(!manual&&(keys.has("arrowup")||keys.has("w")));
+      let boosting=nitroKey&&s.nitro>0.02&&s.odActive<=0;
       if(boosting){s.nitro=Math.max(0,s.nitro-dt*0.42);s.nitroTime+=dt;missionEvent("nitro",dt);}
-      const target=boosting?NITRO_SPD:CRUISE;
-      s.speed+=(target-s.speed)*Math.min(1,dt*(ACCEL/26));
-      s.boostVis+=((boosting?1:0)-s.boostVis)*Math.min(1,dt*6);el.boostFlash.style.opacity=(s.boostVis*0.85).toFixed(2);
+      const gasOn=s.gas||keys.has("w")||keys.has("arrowup");
+      const brakeOn=s.braking||keys.has("s")||keys.has("arrowdown");
+      let base;
+      if(s.odActive>0)base=OVER_SPD;
+      else if(manual){base=brakeOn?REV_SPD:(gasOn?CRUISE:0);}
+      else base=brakeOn?CRUISE*0.35:CRUISE;                 // auto: always cruising (brake eases off)
+      if(s.draft>0)base=Math.max(base,CRUISE)*1.16;          // slipstream draft boost
+      const target=s.odActive>0?OVER_SPD:(boosting?NITRO_SPD:base);
+      const rate=(base<s.speed)?ACCEL*0.7:ACCEL;
+      s.speed+=(target-s.speed)*Math.min(1,dt*(rate/26));
+      const bv=(boosting||s.odActive>0)?1:0;s.boostVis+=(bv-s.boostVis)*Math.min(1,dt*6);el.boostFlash.style.opacity=(s.boostVis*0.85).toFixed(2);
+      // overdrive meter fills from drift/draft; auto-triggers when full
+      if(s.odActive<=0){if(s.draft>0)s.od=Math.min(1,s.od+dt*0.06);if(s.od>=1){s.odActive=OD_TIME;s.od=1;audio.nitro&&audio.nitro();toast("⚡ OVERDRIVE!","#00e5ff");shakeAdd(0.4);}}
+      el.odFill&&(el.odFill.style.width=(s.od*100)+"%");el.odbar&&el.odbar.classList.toggle("odfull",s.od>=0.999||s.odActive>0);
 
       // ---- steering = lane change across the road; drift charges nitro ----
       let steer=s.steer;if(keys.has("arrowleft")||keys.has("a"))steer-=1;if(keys.has("arrowright")||keys.has("d"))steer+=1;steer=Math.max(-1,Math.min(1,steer));
@@ -4738,12 +4806,13 @@ three/build/three.module.js:
       // drift yaw (visual slide) + nitro charge + tyre smoke
       const yawTarget=drifting?-steer*0.5:( -steer*0.12 );
       s.driftYaw+=(yawTarget-s.driftYaw)*Math.min(1,dt*8);
-      if(drifting){s.driftHold+=dt;s.driftTime+=dt;missionEvent("drift",dt);addNitro(dt*0.24*NITRO_MUL);if(Math.random()<0.6)puffSmoke(car.position.x-steer*0.6,0.3,car.position.z+1.6,0xbfc8dd);}
+      if(drifting){s.driftHold+=dt;s.driftTime+=dt;missionEvent("drift",dt);addNitro(dt*0.24*NITRO_MUL);if(s.odActive<=0)s.od=Math.min(1,s.od+dt*0.05);if(Math.random()<0.6)puffSmoke(car.position.x-steer*0.6,0.3,car.position.z+1.6,0xbfc8dd);}
       else{if(s.driftHold>1.3){const b=Math.round(120*Math.min(3,s.driftHold));addScore(b);addNitro(0.16);popup("PERFECT DRIFT +"+b,0x8affff,car.position.x,2.4,car.position.z);meta.tot.pdrift++;missionEvent("pdrift",1);audio.power&&audio.power();}s.driftHold=0;}
 
       // ---- advance along the circuit ----
-      const adv=s.speed*dt;s.dist+=adv;missionEvent("dist",adv);
-      const sl=segLen(Math.floor(s.t));s.t+=adv/Math.max(1,sl);
+      const adv=s.speed*dt;s.dist+=Math.max(0,adv);if(adv>0)missionEvent("dist",adv);
+      const sl=segLen(s.t);s.t+=adv/Math.max(1,sl);
+      if(s.t<0)s.t+=NODES;                                    // reversed past the start line — wrap, no lap
       if(s.t>=NODES){s.t-=NODES;s.lap++;
         if(s.mode!=="endless"&&s.lap>LAPS_TOTAL){endGame(true);}
         else{s.diff=1+(s.lap-1)*0.1;if(s.mode==="endless"){addScore(300);toast("LAP "+s.lap+" · +300","#ffd76a");el.lap.textContent=s.lap;}else{toast("LAP "+s.lap+"/"+LAPS_TOTAL,"#ffd76a");el.lap.textContent=s.lap;}}}
@@ -4755,7 +4824,11 @@ three/build/three.module.js:
       // ---- nitro pads ----
       for(const p of nitroPads){let d=Math.abs(((s.t-p.idx+NODES)%NODES));if(d>NODES/2)d=NODES-d;if(d<0.7&&!p.used){p.used=1;addNitro(0.3*NITRO_MUL);audio.coin();setTimeout(()=>p.used=0,4000);}}
       // ---- coin pickups ----
-      for(const p of coinPads){if(p.mesh.visible)p.mesh.rotation.z+=dt*3;let d=Math.abs(((s.t-p.idx+NODES)%NODES));if(d>NODES/2)d=NODES-d;if(d<0.7&&!p.used&&Math.abs(p.lane-s.lane)<3.4){p.used=1;p.mesh.visible=false;const c=Math.round((14+Math.floor(Math.random()*16))*COIN_MUL);addCoins(c);s.coinsRun+=c;popup("+"+c+"💰",0xffd76a,p.mesh.position.x,2,p.mesh.position.z);audio.coin&&audio.coin();setTimeout(()=>{if(state.phase==="playing"){p.used=0;p.mesh.visible=true;}},6000);}}
+      const magR=s.pw.magnet>0?7.5:3.4;
+      for(const p of coinPads){if(p.mesh.visible)p.mesh.rotation.z+=dt*3;let d=Math.abs(((s.t-p.idx+NODES)%NODES));if(d>NODES/2)d=NODES-d;if(d<0.9&&!p.used&&Math.abs(p.lane-s.lane)<magR){p.used=1;p.mesh.visible=false;const c=Math.round((14+Math.floor(Math.random()*16))*COIN_MUL);addCoins(c);s.coinsRun+=c;popup("+"+c+"💰",0xffd76a,p.mesh.position.x,2,p.mesh.position.z);audio.coin&&audio.coin();setTimeout(()=>{if(state.phase==="playing"){p.used=0;p.mesh.visible=true;}},6000);}}
+      // power-ups
+      for(const p of powerups){if(p.mesh.visible){p.gem.rotation.y+=dt*2.4;p.ring.rotation.z+=dt*1.6;p.mesh.position.y=trackAt(p.idx).y+1.8+Math.sin(time*3+p.idx)*0.2;}let d=Math.abs(((s.t-p.idx+NODES)%NODES));if(d>NODES/2)d=NODES-d;if(d<0.9&&!p.used){p.used=1;p.mesh.visible=false;applyPowerup(p.type);setTimeout(()=>{if(state.phase==="playing"){p.used=0;p.mesh.visible=true;}},12000);}}
+      if(s.pw.x2>0)s.pw.x2=Math.max(0,s.pw.x2-dt);if(s.pw.magnet>0)s.pw.magnet=Math.max(0,s.pw.magnet-dt);
       // ---- combo chain decay ----
       if(s.chainT>0){s.chainT-=dt;if(s.chainT<=0)comboBreak();}
       // ---- guns ----
@@ -4779,7 +4852,7 @@ three/build/three.module.js:
       updateTrail(cx,cz,s.carY+bob);
 
       // ---- rivals ----
-      const rubberBase=CRUISE*s.diff;
+      const rubberBase=CRUISE*s.diff;s.draft=0;
       for(const r of rivals){
         if(r.launch){const L=r.launch;L.t+=dt;r.mesh.position.x+=L.vx*dt;r.mesh.position.y+=L.vy*dt;r.mesh.position.z+=L.vz*dt;L.vy-=22*dt;r.mesh.rotation.x+=L.rx*dt;r.mesh.rotation.z+=L.rz*dt;if(Math.random()<0.35)fireball(r.mesh.position.x,r.mesh.position.y,r.mesh.position.z,1.1);if(L.t>1.1){r.mesh.visible=false;r.launch=null;}continue;}
         if(!r.alive){continue;}
@@ -4794,11 +4867,13 @@ three/build/three.module.js:
           const fast=s.boostVis>0.3||s.speed>CRUISE*1.02;
           takedown(r,r.mesh.position.x,r.mesh.position.z);   // the other car always gets launched & explodes
           if(!fast)hurt();                                    // ...but a slow clip damages you too
-        } else if(Math.abs(dT)<0.7&&laneGap<4.6&&!r.nm){r.nm=true;addScore(90);addNitro(0.08);popup("CLOSE! +90",0xffe08a,r.mesh.position.x,2,r.mesh.position.z);meta.tot.near++;missionEvent("near",1);}
+        } else if(Math.abs(dT)<0.7&&laneGap<4.6&&!r.nm){r.nm=true;addScore(90);addNitro(0.08);if(s.odActive<=0)s.od=Math.min(1,s.od+0.05);popup("CLOSE! +90",0xffe08a,r.mesh.position.x,2,r.mesh.position.z);meta.tot.near++;missionEvent("near",1);}
+        if(dT>0.4&&dT<2.6&&laneGap<3.6)s.draft=1;   // slipstream: tucked in behind a rival
         if(Math.abs(dT)>3)r.nm=false;
       }
       let ahead=0;for(const r of rivals){if(!r.alive)continue;let dT=((r.t-s.t+NODES)%NODES);if(dT>NODES/2)dT-=NODES;if(dT<0)ahead++;}
       el.pos.textContent="P"+(1+ (rivals.filter(r=>r.alive).length - rivals.filter(r=>{let dT=((r.t-s.t+NODES)%NODES);return r.alive&&dT>0&&dT<NODES/2;}).length));
+      el.draftInd.classList.toggle("on",s.draft>0);if(s.draft>0)addNitro(dt*0.16);
 
       // ---- HUD ----
       const spN=Math.min(1,s.speed/NITRO_SPD);const kmh=Math.round(s.speed*2.4);el.spVal.textContent=kmh;el.spFill.style.width=(spN*100)+"%";
