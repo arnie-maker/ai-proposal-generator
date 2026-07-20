@@ -137,8 +137,8 @@
   .rotate p { margin:0; color:#94a3b8; font-size:14px; line-height:1.6; }
   .rotate { cursor:pointer; }
   .rotate .tap { margin-top:10px; font-size:13px; font-weight:800; color:#00e5ff; border:1px solid rgba(0,229,255,0.5); border-radius:999px; padding:9px 20px; }
-  .rotate { display:none; }
-  body.portrait .rotate { display:flex; }
+  /* force-landscape: when the screen is portrait, rotate the whole game so it always renders in landscape */
+  body.forcerot #app { position:fixed; top:0; left:0; width:100vh; height:100vw; transform-origin:top left; transform:rotate(90deg) translateY(-100vw); }
 
   /* landscape / short-height tuning */
   @media (orientation:landscape) and (max-height:560px) {
@@ -160,7 +160,6 @@
 </head>
 <body>
 <div id="app">
-  <div class="rotate" id="rotate"><div class="ic">📱</div><h2 class="gradient-text">Rotate to landscape</h2><p>Moon Racer only plays in landscape.<br>가로로 돌려서 플레이하세요 🏁</p></div>
   <div class="vignette"></div>
   <div class="speedblur" id="speedBlur"></div>
   <div class="boost-flash" id="boostFlash"></div>
@@ -4542,8 +4541,9 @@ three/build/three.module.js:
   window.addEventListener("keydown",(e)=>{const k=e.key.toLowerCase();if(["arrowleft","arrowright","arrowup","arrowdown"," "].includes(k))e.preventDefault();keys.add(k);if(k===" "&&state.phase!=="playing")startGame();});
   window.addEventListener("keyup",(e)=>keys.delete(e.key.toLowerCase()));
   let wheelId=null,wheelCx=0;
-  const wheelStart=(e)=>{e.preventDefault();wheelId=e.pointerId!=null?e.pointerId:"t";const r=el.wheel.getBoundingClientRect();wheelCx=r.left+r.width/2;if(state.phase!=="playing")startGame();wheelMove(e);};
-  const wheelMove=(e)=>{if(wheelId==null)return;const t=e.changedTouches?e.changedTouches[0]:e;let s=(t.clientX-wheelCx)/52;s=Math.max(-1,Math.min(1,s));state.steer=s;el.wheelKnob.style.transform="translateX("+(s*30)+"px)";};
+  let wheelCy=0;
+  const wheelStart=(e)=>{e.preventDefault();wheelId=e.pointerId!=null?e.pointerId:"t";const r=el.wheel.getBoundingClientRect();wheelCx=r.left+r.width/2;wheelCy=r.top+r.height/2;if(state.phase!=="playing")startGame();wheelMove(e);};
+  const wheelMove=(e)=>{if(wheelId==null)return;const t=e.changedTouches?e.changedTouches[0]:e;let s=(forceLand?(t.clientY-wheelCy):(t.clientX-wheelCx))/52;s=Math.max(-1,Math.min(1,s));state.steer=s;el.wheelKnob.style.transform="translateX("+(s*30)+"px)";};
   const wheelEnd=()=>{wheelId=null;state.steer=0;el.wheelKnob.style.transform="translateX(0)";};
   el.wheel.addEventListener("pointerdown",(e)=>{el.wheel.setPointerCapture&&el.wheel.setPointerCapture(e.pointerId);wheelStart(e);});
   el.wheel.addEventListener("pointermove",wheelMove);el.wheel.addEventListener("pointerup",wheelEnd);el.wheel.addEventListener("pointercancel",wheelEnd);
@@ -4705,7 +4705,8 @@ three/build/three.module.js:
   function onResize(){const w=app.clientWidth||window.innerWidth||360,h=app.clientHeight||window.innerHeight||640;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();if(composer)composer.setSize(w,h);if(bloom&&bloom.setSize)bloom.setSize(Math.round(w/2),Math.round(h/2));}
   // orientation: landscape only. In portrait, block play and pause.
   function isPortrait(){return (window.innerHeight||app.clientHeight)>(window.innerWidth||app.clientWidth);}
-  function checkOrient(){const port=isPortrait();document.body.classList.toggle("portrait",port);state.blocked=port;if(!port)onResize();}
+  let forceLand=false;
+  function checkOrient(){forceLand=isPortrait();document.body.classList.toggle("forcerot",forceLand);onResize();}
   window.addEventListener("resize",()=>{onResize();checkOrient();});
   window.addEventListener("orientationchange",()=>{setTimeout(()=>{onResize();checkOrient();},160);});
   checkOrient();
@@ -4714,7 +4715,6 @@ three/build/three.module.js:
   function animate(){
     requestAnimationFrame(animate);
     const dt=Math.min(clock.getDelta(),0.05);const time=clock.elapsedTime;
-    if(state.blocked){renderScene();return;}   // portrait — paused, waiting for landscape
     fxFrame(dt);moonBody.rotation.y+=dt*0.01;planet.rotation.y+=dt*0.02;
 
     if(state.phase==="playing"){
