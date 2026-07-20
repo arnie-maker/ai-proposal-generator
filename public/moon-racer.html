@@ -137,8 +137,8 @@
   .rotate p { margin:0; color:#94a3b8; font-size:14px; line-height:1.6; }
   .rotate { cursor:pointer; }
   .rotate .tap { margin-top:10px; font-size:13px; font-weight:800; color:#00e5ff; border:1px solid rgba(0,229,255,0.5); border-radius:999px; padding:9px 20px; }
-  @media (orientation:portrait) { .rotate { display:flex; } }
-  body.rot-off .rotate { display:none !important; }
+  .rotate { display:none; }
+  body.portrait .rotate { display:flex; }
 
   /* landscape / short-height tuning */
   @media (orientation:landscape) and (max-height:560px) {
@@ -160,7 +160,7 @@
 </head>
 <body>
 <div id="app">
-  <div class="rotate" id="rotate"><div class="ic">📱</div><h2 class="gradient-text">Best in landscape</h2><p>Rotate for the full view — or just tap to play.<br>가로로 돌리면 더 좋아요. 그냥 탭하면 바로 플레이 🏁</p><div class="tap">▶ Tap to play</div></div>
+  <div class="rotate" id="rotate"><div class="ic">📱</div><h2 class="gradient-text">Rotate to landscape</h2><p>Moon Racer only plays in landscape.<br>가로로 돌려서 플레이하세요 🏁</p></div>
   <div class="vignette"></div>
   <div class="speedblur" id="speedBlur"></div>
   <div class="boost-flash" id="boostFlash"></div>
@@ -4167,7 +4167,6 @@ three/build/three.module.js:
  */
 (function () {
   // rotate hint is a suggestion, never a blocker — tap anywhere on it to dismiss and play
-  (function(){var r=document.getElementById("rotate");if(r)r.addEventListener("pointerdown",function(){document.body.classList.add("rot-off");},{once:true});})();
   const THREE = window.THREE;
   function showFatal(msg){var c=document.getElementById("card");if(c)c.innerHTML='<h1 style="color:#fff;font-size:22px;margin:0 0 10px">Can’t run 3D here</h1><p style="color:#94a3b8;font-size:14px;line-height:1.5;margin:0">'+msg+'</p>';}
   if(!THREE){showFatal("The 3D engine didn’t load. Open the full-screen link and try again.");return;}
@@ -4360,7 +4359,7 @@ three/build/three.module.js:
   /* ============================ RENDERER / SCENE ============================ */
   let renderer;
   try{renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});}catch(e){showFatal("WebGL is unavailable.");return;}
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.6));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.3));
   renderer.setSize(app.clientWidth||360,app.clientHeight||640);
   if(THREE.ACESFilmicToneMapping){renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;}
   app.insertBefore(renderer.domElement,app.firstChild);
@@ -4376,7 +4375,7 @@ three/build/three.module.js:
   try{const pm=new THREE.PMREMGenerator(renderer);const es=new THREE.Scene();es.add(new THREE.Mesh(new THREE.SphereGeometry(40,12,10),new THREE.MeshBasicMaterial({color:0x0a0824,side:THREE.BackSide})));[[0x00e5ff,10,8,-12],[0xff2bd6,-12,6,10],[0xffe08a,0,16,4],[0x66ffcc,8,-4,12]].forEach(a=>{const pl=new THREE.Mesh(new THREE.PlaneGeometry(16,16),new THREE.MeshBasicMaterial({color:a[0]}));pl.position.set(a[1],a[2],a[3]);pl.lookAt(0,0,0);es.add(pl);});scene.environment=pm.fromScene(es,0,0.1,80).texture;}catch(e){}
   // post-processing: neon bloom
   let composer=null,bloom=null;
-  function buildComposer(){try{if(!window.THREEPP)return;const w=app.clientWidth||360,h=app.clientHeight||640;composer=new THREEPP.EffectComposer(renderer);composer.addPass(new THREEPP.RenderPass(scene,camera));bloom=new THREEPP.UnrealBloomPass(new THREE.Vector2(w,h),0.7,0.6,0.82);composer.addPass(bloom);composer.setSize(w,h);}catch(e){composer=null;}}
+  function buildComposer(){try{if(!window.THREEPP)return;const w=app.clientWidth||360,h=app.clientHeight||640;composer=new THREEPP.EffectComposer(renderer);composer.setPixelRatio(1);composer.addPass(new THREEPP.RenderPass(scene,camera));bloom=new THREEPP.UnrealBloomPass(new THREE.Vector2(Math.round(w/2),Math.round(h/2)),0.62,0.55,0.84);composer.addPass(bloom);composer.setSize(w,h);}catch(e){composer=null;}}
   buildComposer();
   function renderScene(){if(composer)composer.render();else renderer.render(scene,camera);}
 
@@ -4703,14 +4702,19 @@ three/build/three.module.js:
 
   /* ============================ MAIN LOOP ============================ */
   const clock=new THREE.Clock();
-  function onResize(){const w=app.clientWidth||window.innerWidth||360,h=app.clientHeight||window.innerHeight||640;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();if(composer)composer.setSize(w,h);if(bloom&&bloom.setSize)bloom.setSize(w,h);}
-  window.addEventListener("resize",onResize);
-  window.addEventListener("orientationchange",()=>{setTimeout(onResize,120);});
+  function onResize(){const w=app.clientWidth||window.innerWidth||360,h=app.clientHeight||window.innerHeight||640;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();if(composer)composer.setSize(w,h);if(bloom&&bloom.setSize)bloom.setSize(Math.round(w/2),Math.round(h/2));}
+  // orientation: landscape only. In portrait, block play and pause.
+  function isPortrait(){return (window.innerHeight||app.clientHeight)>(window.innerWidth||app.clientWidth);}
+  function checkOrient(){const port=isPortrait();document.body.classList.toggle("portrait",port);state.blocked=port;if(!port)onResize();}
+  window.addEventListener("resize",()=>{onResize();checkOrient();});
+  window.addEventListener("orientationchange",()=>{setTimeout(()=>{onResize();checkOrient();},160);});
+  checkOrient();
   let miniAcc=0;
 
   function animate(){
     requestAnimationFrame(animate);
     const dt=Math.min(clock.getDelta(),0.05);const time=clock.elapsedTime;
+    if(state.blocked){renderScene();return;}   // portrait — paused, waiting for landscape
     fxFrame(dt);moonBody.rotation.y+=dt*0.01;planet.rotation.y+=dt*0.02;
 
     if(state.phase==="playing"){
