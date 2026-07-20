@@ -86,7 +86,7 @@
 
   .overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:20px; text-align:center; overflow:auto; }
   .overlay.hidden { display:none; }
-  .card { padding:26px 24px; max-width:420px; width:100%; }
+  .card { padding:26px 24px; max-width:420px; width:100%; max-height:calc(100% - 24px); overflow:auto; }
   .card h1 { margin:0 0 6px; font-size:32px; font-weight:900; letter-spacing:.02em; text-wrap:balance; }
   .card p.lead { margin:0 0 16px; font-size:13.5px; color:#94a3b8; line-height:1.5; }
   .row { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:10px 0; }
@@ -140,8 +140,9 @@
   .tab { font-size:12px; font-weight:700; padding:7px 16px; border-radius:999px; cursor:pointer; color:#94a3b8; background:rgba(255,255,255,0.04); }
   .tab.on { color:#fff; background:linear-gradient(135deg,#4f6ef7,#8b5cf6); }
 
-  /* force-landscape: when the screen is portrait, rotate the whole game so it always renders in landscape — no prompt */
-  body.forcerot #app { position:fixed; top:0; left:0; width:100vh; height:100vw; transform-origin:top left; transform:rotate(90deg) translateY(-100vw); }
+  /* force-landscape: when the screen is portrait, rotate the whole game so it always renders in landscape — no prompt.
+     centred rotation (translate -50% then rotate) is robust on iOS where the translateY(-100vw) hack clipped the UI. */
+  body.forcerot #app { position:fixed; top:50%; left:50%; width:100vh; height:100vw; width:100dvh; height:100dvw; transform-origin:center center; transform:translate(-50%,-50%) rotate(90deg); }
 
   /* landscape / short-height tuning */
   @media (orientation:landscape) and (max-height:560px) {
@@ -4210,7 +4211,8 @@ three/build/three.module.js:
   const BASE={cruise:98,nitroSpd:178,accel:95,turn:30,hp:3};
   let CRUISE=BASE.cruise, NITRO_SPD=BASE.nitroSpd, ACCEL=BASE.accel, TURN_LANE=BASE.turn, MAXHP=BASE.hp;
   const REV_SPD=-26, OVER_SPD=215, OD_TIME=5;   // reverse, overdrive top speed, overdrive duration
-  const CAM_DIST=11, CAM_H=4.6, LOOK_AHEAD=20;
+  const CAM_DIST=6.8, CAM_H=2.3, LOOK_AHEAD=16;   // close + low + narrow FOV → car reads big and sits low in frame
+  const CAR_SCALE=1.32;                            // enlarge the car model so it dominates the lower frame
   const LAPS_TOTAL=3;
   const SKINS=[
     {id:"aurora",name:"Aurora",price:0,a:0x00e5ff,b:0xff2bd6},
@@ -4403,21 +4405,63 @@ three/build/three.module.js:
 
   /* ============================ CIRCUIT ============================ */
   const track=[];const cumLen=[];let trackLen=0;
-  // ---- vertical elevation profile: rolling hills + underground dive + soar into space ----
-  const DIVE_C=0.30, DIVE_W=0.058, RISE_C=0.63, RISE_W=0.065;   // section centres/widths (fraction of loop)
-  function _bump(f,c,w){let d=Math.abs(f-c);d=Math.min(d,1-d);return Math.exp(-(d*d)/(w*w));}
-  function elevAt(i){const a=i/NODES*Math.PI*2;const f=((i%NODES)+NODES)%NODES/NODES;
-    return 7*Math.sin(a*3+0.5)+4*Math.sin(a*5-1.1) - 42*_bump(f,DIVE_C,DIVE_W) + 78*_bump(f,RISE_C,RISE_W);}
+  // ---- the road climbs into space and does a full rollercoaster LOOP (360° vertical), then descends ----
+  // Each node carries a full orthonormal frame: tangent T, up U, side N=T×U — so the road can go upside-down.
+  const LOOP_C=Math.round(0.63*NODES);            // loop centre node
+  const LOOP_N=46;                                // nodes spanning the loop
+  const LOOP_L0=LOOP_C-Math.floor(LOOP_N/2), LOOP_L1=LOOP_C+Math.floor(LOOP_N/2);  // loop node range [L0,L1]
+  const LOOP_R=34;                                // loop radius
+  const LOOP_H=48;                                // altitude the track climbs to for the loop (into space)
+  const CLIMB_N=64;                               // nodes of climb/descent on each side of the loop
+  const inLoopRange=(i)=>{i=((i%NODES)+NODES)%NODES;return i>=LOOP_L0&&i<=LOOP_L1;};
+  let LOOP=null;                                  // {ax,ay,az, tx,tz, nx,nz} anchor + entry frame, for decoration
   (function buildTrack(){
-    const pts=[];
-    for(let i=0;i<NODES;i++){const a=i/NODES*Math.PI*2;const R=210+64*Math.sin(a*2+0.4)+34*Math.sin(a*3-0.9)+18*Math.sin(a*5+1.7);pts.push({x:Math.cos(a)*R,z:Math.sin(a)*R});}
-    for(let i=0;i<NODES;i++){const p=pts[i],n=pts[(i+1)%NODES],q=pts[(i-1+NODES)%NODES];let tx=n.x-q.x,tz=n.z-q.z;const L=Math.hypot(tx,tz)||1;tx/=L;tz/=L;track.push({x:p.x,y:elevAt(i),z:p.z,tx,tz,nx:-tz,nz:tx});}
-    let acc=0;for(let i=0;i<NODES;i++){cumLen.push(acc);const n=track[(i+1)%NODES];acc+=Math.hypot(n.x-track[i].x,n.z-track[i].z);}trackLen=acc;
+    const smooth=(t)=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);};
+    // horizontal advance weights — freeze the ground track through the loop so it's a clean vertical circle
+    const w=new Array(NODES);for(let i=0;i<NODES;i++)w[i]=(i>=LOOP_L0&&i<LOOP_L1)?0:1;
+    let wtot=0;for(let i=0;i<NODES;i++)wtot+=w[i];
+    const ang=new Array(NODES);{let acc=0;for(let i=0;i<NODES;i++){ang[i]=acc/wtot*Math.PI*2;acc+=w[i];}}
+    const RR=(a)=>210+64*Math.sin(a*2+0.4)+34*Math.sin(a*3-0.9)+18*Math.sin(a*5+1.7);
+    const bx=[],bz=[];for(let i=0;i<NODES;i++){const a=ang[i],R=RR(a);bx.push(Math.cos(a)*R);bz.push(Math.sin(a)*R);}
+    // ground-plane tangent per node (central diff)
+    const thx=[],thz=[];for(let i=0;i<NODES;i++){const n=(i+1)%NODES,q=(i-1+NODES)%NODES;let tx=bx[n]-bx[q],tz=bz[n]-bz[q];const L=Math.hypot(tx,tz)||1;thx.push(tx/L);thz.push(tz/L);}
+    const eTx=thx[LOOP_L0], eTz=thz[LOOP_L0];     // entry direction into the loop
+    const hills=(i)=>{const a=ang[i];return 7*Math.sin(a*3+0.5)+4*Math.sin(a*5-1.1);};
+    const plateau=(i)=>{if(i>=LOOP_L0&&i<=LOOP_L1)return 1; if(i<LOOP_L0)return smooth((i-(LOOP_L0-CLIMB_N))/CLIMB_N); return 1-smooth((i-LOOP_L1)/CLIMB_N);};
+    const anchorY=LOOP_H+hills(LOOP_L0);
+    LOOP={ax:bx[LOOP_L0],ay:anchorY,az:bz[LOOP_L0],tx:eTx,tz:eTz,nx:-eTz,nz:eTx};
+    for(let i=0;i<NODES;i++){
+      let x,y,z,Tx,Ty,Tz,Ux,Uy,Uz;
+      if(i>=LOOP_L0&&i<=LOOP_L1){
+        const ph=(i-LOOP_L0)/(LOOP_L1-LOOP_L0)*Math.PI*2, sp=Math.sin(ph), cp=Math.cos(ph);
+        x=bx[LOOP_L0]+eTx*(LOOP_R*sp); z=bz[LOOP_L0]+eTz*(LOOP_R*sp); y=anchorY+LOOP_R*(1-cp);
+        Tx=eTx*cp; Ty=sp; Tz=eTz*cp; Ux=-eTx*sp; Uy=cp; Uz=-eTz*sp;
+      } else { x=bx[i]; z=bz[i]; y=LOOP_H*plateau(i)+hills(i); Tx=thx[i];Ty=0;Tz=thz[i]; Ux=0;Uy=1;Uz=0; }
+      track.push({x,y,z,tx:Tx,ty:Ty,tz:Tz,ux:Ux,uy:Uy,uz:Uz,nx:0,ny:0,nz:0});
+    }
+    // give climb/descent nodes a true 3D tangent (so the car pitches up the ramp into space), then build frames
+    for(let i=0;i<NODES;i++){
+      if(i>=LOOP_L0&&i<=LOOP_L1){ /* loop frame already analytic */ }
+      else{ const n=track[(i+1)%NODES],q=track[(i-1+NODES)%NODES];let Tx=n.x-q.x,Ty=n.y-q.y,Tz=n.z-q.z;const L=Math.hypot(Tx,Ty,Tz)||1;track[i].tx=Tx/L;track[i].ty=Ty/L;track[i].tz=Tz/L; }
+      const nd=track[i];
+      // orthonormalise up against tangent, then N = T × U
+      let Ux=nd.ux,Uy=nd.uy,Uz=nd.uz;const dp=Ux*nd.tx+Uy*nd.ty+Uz*nd.tz;Ux-=dp*nd.tx;Uy-=dp*nd.ty;Uz-=dp*nd.tz;const lu=Math.hypot(Ux,Uy,Uz)||1;Ux/=lu;Uy/=lu;Uz/=lu;nd.ux=Ux;nd.uy=Uy;nd.uz=Uz;
+      let Nx=nd.ty*Uz-nd.tz*Uy,Ny=nd.tz*Ux-nd.tx*Uz,Nz=nd.tx*Uy-nd.ty*Ux;const ln=Math.hypot(Nx,Ny,Nz)||1;nd.nx=Nx/ln;nd.ny=Ny/ln;nd.nz=Nz/ln;
+    }
+    // 3D cumulative arc length (loop counts its full circumference → speed stays honest through it)
+    let acc=0;for(let i=0;i<NODES;i++){cumLen.push(acc);const n=track[(i+1)%NODES];acc+=Math.hypot(n.x-track[i].x,n.y-track[i].y,n.z-track[i].z);}trackLen=acc;
   })();
   const NODE_SP=trackLen/NODES;
-  function segLen(i){i=((Math.floor(i)%NODES)+NODES)%NODES;const a=track[i],b=track[(i+1)%NODES];return Math.hypot(b.x-a.x,b.z-a.z);}
-  function trackAt(idx){idx=((idx%NODES)+NODES)%NODES;const i=Math.floor(idx),f=idx-i;const a=track[i],b=track[(i+1)%NODES];let tx=a.tx+(b.tx-a.tx)*f,tz=a.tz+(b.tz-a.tz)*f;const L=Math.hypot(tx,tz)||1;tx/=L;tz/=L;return {x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f,z:a.z+(b.z-a.z)*f,tx,tz,nx:-tz,nz:tx};}
-  function slopeAt(idx){return (trackAt(idx+2).y-trackAt(idx-2).y)/(4*NODE_SP);}
+  function segLen(i){i=((Math.floor(i)%NODES)+NODES)%NODES;const a=track[i],b=track[(i+1)%NODES];return Math.hypot(b.x-a.x,b.y-a.y,b.z-a.z);}
+  function trackAt(idx){idx=((idx%NODES)+NODES)%NODES;const i=Math.floor(idx),f=idx-i;const a=track[i],b=track[(i+1)%NODES];const L2=(p,q)=>p+(q-p)*f;
+    let Tx=L2(a.tx,b.tx),Ty=L2(a.ty,b.ty),Tz=L2(a.tz,b.tz);let lt=Math.hypot(Tx,Ty,Tz)||1;Tx/=lt;Ty/=lt;Tz/=lt;
+    let Ux=L2(a.ux,b.ux),Uy=L2(a.uy,b.uy),Uz=L2(a.uz,b.uz);const dp=Ux*Tx+Uy*Ty+Uz*Tz;Ux-=dp*Tx;Uy-=dp*Ty;Uz-=dp*Tz;let lu=Math.hypot(Ux,Uy,Uz)||1;Ux/=lu;Uy/=lu;Uz/=lu;
+    let Nx=Ty*Uz-Tz*Uy,Ny=Tz*Ux-Tx*Uz,Nz=Tx*Uy-Ty*Ux;
+    return {x:L2(a.x,b.x),y:L2(a.y,b.y),z:L2(a.z,b.z),tx:Tx,ty:Ty,tz:Tz,ux:Ux,uy:Uy,uz:Uz,nx:Nx,ny:Ny,nz:Nz};}
+  function slopeAt(idx){return trackAt(idx).ty;}   // vertical component of the tangent (kept for legacy callers)
+  // reusable frame→orientation helper (aligns an object: local +X→N, +Y→U, −Z→T i.e. forward = tangent)
+  const _obM=new THREE.Matrix4(),_obN=new THREE.Vector3(),_obU=new THREE.Vector3(),_obF=new THREE.Vector3();
+  function orientTo(obj,p){_obN.set(p.nx,p.ny,p.nz);_obU.set(p.ux,p.uy,p.uz);_obF.set(-p.tx,-p.ty,-p.tz);_obM.makeBasis(_obN,_obU,_obF);obj.quaternion.setFromRotationMatrix(_obM);}
 
   // road ribbon (built once) with baked asphalt + edge lines + centre dashes
   const roadTex=(function(){const c=document.createElement("canvas");c.width=64;c.height=128;const x=c.getContext("2d");x.fillStyle="#333a4d";x.fillRect(0,0,64,128);for(let i=0;i<600;i++){const g=40+Math.random()*30;x.fillStyle="rgba("+g+","+g+","+(g+10)+",0.5)";x.fillRect(Math.random()*64,Math.random()*128,1,1);}
@@ -4426,22 +4470,32 @@ three/build/three.module.js:
     const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;})();
   (function buildRoadMesh(){
     const verts=[],uvs=[],idx=[];const TILE=22;const eL=[],eR=[],eLi=[],eRi=[];const EW=0.7;
-    for(let i=0;i<=NODES;i++){const n=track[i%NODES];const y=n.y+0.05,ey=n.y+0.11;const lx=n.x+n.nx*ROAD_HW, lz=n.z+n.nz*ROAD_HW, rx=n.x-n.nx*ROAD_HW, rz=n.z-n.nz*ROAD_HW;
-      verts.push(lx,y,lz, rx,y,rz);const v=cumLen[i%NODES]/TILE;uvs.push(0,v, 1,v);
-      // edge-line ribbons (inset from the very edge)
-      eL.push(n.x+n.nx*(ROAD_HW-EW),ey,n.z+n.nz*(ROAD_HW-EW), n.x+n.nx*(ROAD_HW-EW*2.4),ey,n.z+n.nz*(ROAD_HW-EW*2.4));
-      eR.push(n.x-n.nx*(ROAD_HW-EW*2.4),ey,n.z-n.nz*(ROAD_HW-EW*2.4), n.x-n.nx*(ROAD_HW-EW),ey,n.z-n.nz*(ROAD_HW-EW));}
+    for(let i=0;i<=NODES;i++){const n=track[i%NODES];
+      const ox=n.ux*0.06,oy=n.uy*0.06,oz=n.uz*0.06, ex=n.ux*0.12,ey2=n.uy*0.12,ez=n.uz*0.12;   // lift surface / edges along U
+      const lx=n.x+n.nx*ROAD_HW+ox, ly=n.y+n.ny*ROAD_HW+oy, lz=n.z+n.nz*ROAD_HW+oz;
+      const rx=n.x-n.nx*ROAD_HW+ox, ry=n.y-n.ny*ROAD_HW+oy, rz=n.z-n.nz*ROAD_HW+oz;
+      verts.push(lx,ly,lz, rx,ry,rz);const v=cumLen[i%NODES]/TILE;uvs.push(0,v, 1,v);
+      // edge-line ribbons (inset from the very edge, along the side vector N)
+      eL.push(n.x+n.nx*(ROAD_HW-EW)+ex,n.y+n.ny*(ROAD_HW-EW)+ey2,n.z+n.nz*(ROAD_HW-EW)+ez, n.x+n.nx*(ROAD_HW-EW*2.4)+ex,n.y+n.ny*(ROAD_HW-EW*2.4)+ey2,n.z+n.nz*(ROAD_HW-EW*2.4)+ez);
+      eR.push(n.x-n.nx*(ROAD_HW-EW*2.4)+ex,n.y-n.ny*(ROAD_HW-EW*2.4)+ey2,n.z-n.nz*(ROAD_HW-EW*2.4)+ez, n.x-n.nx*(ROAD_HW-EW)+ex,n.y-n.ny*(ROAD_HW-EW)+ey2,n.z-n.nz*(ROAD_HW-EW)+ez);}
     for(let i=0;i<NODES;i++){const a=i*2,b=i*2+1,c=i*2+2,d=i*2+3;idx.push(a,b,c, b,d,c);eLi.push(a,b,c, b,d,c);eRi.push(a,b,c, b,d,c);}
     const geo=new THREE.BufferGeometry();geo.setAttribute("position",new THREE.Float32BufferAttribute(verts,3));geo.setAttribute("uv",new THREE.Float32BufferAttribute(uvs,2));geo.setIndex(idx);geo.computeVertexNormals();
-    scene.add(new THREE.Mesh(geo,new THREE.MeshStandardMaterial({map:roadTex,color:0xffffff,roughness:0.7,metalness:0.15,emissive:0x1a3350,emissiveIntensity:0.85,side:THREE.DoubleSide})));
+    // darker, matte road so bright cars / items pop clearly against it (visual separation)
+    scene.add(new THREE.Mesh(geo,new THREE.MeshStandardMaterial({map:roadTex,color:0x9aa4b8,roughness:0.85,metalness:0.1,emissive:0x0e1c30,emissiveIntensity:0.5,side:THREE.DoubleSide})));
     // bright glowing edge lines (unlit ribbons)
     const mkEdge=(arr,ii,col)=>{const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.Float32BufferAttribute(arr,3));g.setIndex(ii);const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:col,fog:true,side:THREE.DoubleSide}));scene.add(m);};
     mkEdge(eL,eLi,0x00e5ff);mkEdge(eR,eRi,0xff2bd6);
-    // glowing guard-rail posts every few nodes
+    // glowing guard-rail posts every few nodes (skip the loop — they'd point every which way)
     const post=new THREE.CylinderGeometry(0.32,0.42,3.4,6);
-    for(let i=0;i<NODES;i+=6){const n=track[i];const col=(i/6)%2?0x00e5ff:0xff2bd6;const mat=new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:2});for(const s of[1,-1]){const p=new THREE.Mesh(post,mat);p.position.set(n.x+n.nx*s*(ROAD_HW+1.4),n.y+1.7,n.z+n.nz*s*(ROAD_HW+1.4));scene.add(p);}}
-    // support pylons under the elevated / space sections
-    for(let i=0;i<NODES;i+=4){const n=track[i];if(n.y<8)continue;const h=n.y;const pyl=new THREE.Mesh(new THREE.CylinderGeometry(0.6,1.0,h,6),new THREE.MeshStandardMaterial({color:0x1a2033,metalness:0.7,roughness:0.4,emissive:0x0a1830,emissiveIntensity:0.5}));pyl.position.set(n.x,n.y/2,n.z);scene.add(pyl);}
+    for(let i=0;i<NODES;i+=6){if(inLoopRange(i))continue;const n=track[i];const col=(i/6)%2?0x00e5ff:0xff2bd6;const mat=new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:2});for(const s of[1,-1]){const p=new THREE.Mesh(post,mat);p.position.set(n.x+n.nx*s*(ROAD_HW+1.4),n.y+n.ny*s*(ROAD_HW+1.4)+n.uy*1.7,n.z+n.nz*s*(ROAD_HW+1.4));scene.add(p);}}
+    // support pylons under the elevated / space climb (not the loop)
+    for(let i=0;i<NODES;i+=4){if(inLoopRange(i))continue;const n=track[i];if(n.y<8)continue;const h=n.y;const pyl=new THREE.Mesh(new THREE.CylinderGeometry(0.6,1.0,h,6),new THREE.MeshStandardMaterial({color:0x1a2033,metalness:0.7,roughness:0.4,emissive:0x0a1830,emissiveIntensity:0.5}));pyl.position.set(n.x,n.y/2,n.z);scene.add(pyl);}
+    // ---- the loop's structural hoop: glowing twin rails outlining the 360° loop, visible from afar ----
+    if(LOOP){const centre=new THREE.Vector3(LOOP.ax,LOOP.ay+LOOP_R,LOOP.az);
+      for(const rr of [LOOP_R+ROAD_HW+0.7, LOOP_R-ROAD_HW-0.7]){
+        const hoop=new THREE.Mesh(new THREE.TorusGeometry(rr,0.5,10,80),new THREE.MeshStandardMaterial({color:0x081024,emissive:0x00e5ff,emissiveIntensity:2.2,metalness:0.6,roughness:0.3}));
+        hoop.position.copy(centre);hoop.lookAt(centre.x+LOOP.nx,centre.y,centre.z+LOOP.nz);scene.add(hoop);}
+    }
   })();
 
   // roadside scenery — moon base structures flanking the circuit
@@ -4468,15 +4522,15 @@ three/build/three.module.js:
     // hazard chevrons striped up the incline
     for(let c=0;c<3;c++){const t=(c+0.5)/3;const zz=-L/2+t*L, yy=t*H+0.16;const ch=new THREE.Mesh(new THREE.BoxGeometry(W*0.82,0.12,1.1),new THREE.MeshBasicMaterial({color:c%2?0xffd76a:0x00e5ff,fog:false}));ch.position.set(n.x+fx*zz, n.y+yy, n.z+fz*zz);ch.rotation.y=Math.atan2(fx,fz);scene.add(ch);}
   }
-  for(let k=0;k<7;k++){const idx=Math.floor((k+0.5)/7*NODES);makeRamp(track[idx]);ramps.push(idx);}
-  const nitroPads=[];for(let k=0;k<14;k++){const idx=Math.floor((k+0.3)/14*NODES);if(ramps.includes(idx))continue;const n=track[idx];const pad=new THREE.Mesh(new THREE.PlaneGeometry(ROAD_HW*1.1,3.4),new THREE.MeshBasicMaterial({color:0x33e0ff,transparent:true,opacity:0.34,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,depthWrite:false}));pad.rotation.x=-Math.PI/2;pad.rotation.z=-Math.atan2(n.tx,n.tz);pad.position.set(n.x,n.y+0.14,n.z);scene.add(pad);nitroPads.push({idx,used:0});}
+  for(let k=0;k<7;k++){const idx=Math.floor((k+0.5)/7*NODES);if(inLoopRange(idx))continue;makeRamp(track[idx]);ramps.push(idx);}
+  const nitroPads=[];for(let k=0;k<14;k++){const idx=Math.floor((k+0.3)/14*NODES);if(ramps.includes(idx)||inLoopRange(idx))continue;const n=track[idx];const pad=new THREE.Mesh(new THREE.PlaneGeometry(ROAD_HW*1.1,3.4),new THREE.MeshBasicMaterial({color:0x33e0ff,transparent:true,opacity:0.34,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,depthWrite:false}));pad.rotation.x=-Math.PI/2;pad.rotation.z=-Math.atan2(n.tx,n.tz);pad.position.set(n.x,n.y+0.14,n.z);scene.add(pad);nitroPads.push({idx,used:0});}
   // floating coin pickups along the track
   const coinPads=[];const coinGeo=new THREE.CylinderGeometry(0.7,0.7,0.14,16);const coinMat=new THREE.MeshStandardMaterial({color:0xffd76a,emissive:0xffb43a,emissiveIntensity:1.8,metalness:0.6,roughness:0.3});
-  for(let k=0;k<18;k++){const idx=Math.floor((k+0.62)/18*NODES);if(ramps.includes(idx))continue;const n=track[idx];const lane=(Math.random()-0.5)*ROAD_HW*1.3;const m=new THREE.Mesh(coinGeo,coinMat);m.rotation.x=Math.PI/2;m.position.set(n.x+n.nx*lane,n.y+1.3,n.z+n.nz*lane);scene.add(m);coinPads.push({idx,lane,mesh:m,used:0});}
+  for(let k=0;k<18;k++){const idx=Math.floor((k+0.62)/18*NODES);if(ramps.includes(idx)||inLoopRange(idx))continue;const n=track[idx];const lane=(Math.random()-0.5)*ROAD_HW*1.3;const m=new THREE.Mesh(coinGeo,coinMat);m.rotation.x=Math.PI/2;m.position.set(n.x+n.nx*lane,n.y+1.3,n.z+n.nz*lane);scene.add(m);coinPads.push({idx,lane,mesh:m,used:0});}
   // on-track power-ups: shield / x2 / magnet / repair / overdrive
   const PW_TYPES=[{t:"shield",c:0x66ccff},{t:"x2",c:0x66ffcc},{t:"magnet",c:0xb060ff},{t:"repair",c:0x66ff88},{t:"od",c:0xffd76a}];
   const powerups=[];const pwGeo=new THREE.OctahedronGeometry(1.0,0);
-  for(let k=0;k<10;k++){const idx=Math.floor((k+0.15)/10*NODES);if(ramps.includes(idx))continue;const n=track[idx];const spec=PW_TYPES[k%PW_TYPES.length];const mat=new THREE.MeshStandardMaterial({color:spec.c,emissive:spec.c,emissiveIntensity:2.2,metalness:0.4,roughness:0.25});const grp=new THREE.Group();const gem=new THREE.Mesh(pwGeo,mat);grp.add(gem);const ring=new THREE.Mesh(new THREE.TorusGeometry(1.5,0.1,8,24),new THREE.MeshBasicMaterial({color:spec.c,fog:false}));ring.rotation.x=Math.PI/2;grp.add(ring);grp.position.set(n.x,n.y+1.8,n.z);scene.add(grp);powerups.push({idx,type:spec.t,mesh:grp,gem,ring,used:0});}
+  for(let k=0;k<10;k++){const idx=Math.floor((k+0.15)/10*NODES);if(ramps.includes(idx)||inLoopRange(idx))continue;const n=track[idx];const spec=PW_TYPES[k%PW_TYPES.length];const mat=new THREE.MeshStandardMaterial({color:spec.c,emissive:spec.c,emissiveIntensity:2.2,metalness:0.4,roughness:0.25});const grp=new THREE.Group();const gem=new THREE.Mesh(pwGeo,mat);grp.add(gem);const ring=new THREE.Mesh(new THREE.TorusGeometry(1.5,0.1,8,24),new THREE.MeshBasicMaterial({color:spec.c,fog:false}));ring.rotation.x=Math.PI/2;grp.add(ring);grp.position.set(n.x,n.y+1.8,n.z);scene.add(grp);powerups.push({idx,type:spec.t,mesh:grp,gem,ring,used:0});}
   function applyPowerup(type){const s=state;if(type==="shield"){s.pw.shield=1;toast("🛡️ SHIELD","#66ccff");}
     else if(type==="x2"){s.pw.x2=8;toast("✕2 SCORE 8s","#66ffcc");}
     else if(type==="magnet"){s.pw.magnet=8;toast("🧲 MAGNET 8s","#b060ff");}
@@ -4486,29 +4540,11 @@ three/build/three.module.js:
 
   // start/finish gate
   (function(){const n=track[0];const a=Math.atan2(n.tx,n.tz);for(const s of[1,-1]){const pillar=new THREE.Mesh(new THREE.BoxGeometry(1.2,10,1.2),new THREE.MeshStandardMaterial({color:0xffd76a,emissive:0xffb43a,emissiveIntensity:2}));pillar.position.set(n.x+n.nx*s*(ROAD_HW+1),n.y+5,n.z+n.nz*s*(ROAD_HW+1));scene.add(pillar);}const bar=new THREE.Mesh(new THREE.BoxGeometry(ROAD_HW*2+4,1.2,0.6),new THREE.MeshStandardMaterial({color:0xffd76a,emissive:0xffb43a,emissiveIntensity:1.6}));bar.position.set(n.x,n.y+9.5,n.z);bar.rotation.y=a;scene.add(bar);})();
-  // ---- fully enclosed underground tunnel through the dive + glowing portal rings in the space section ----
-  (function(){const dc=Math.round(DIVE_C*NODES),dw=Math.round(DIVE_W*NODES*2.6);
-    const RH=ROAD_HW+4, RV=13, SEG=20, CY=7;            // tube half-width / half-height / cross-section res / centre lift
-    const verts=[],idx=[],rings=[];
-    for(let k=-dw;k<=dw;k++){const i=((dc+k)%NODES+NODES)%NODES;const n=track[i];const cy=n.y+CY;
-      const base=verts.length/3;const row=[];
-      for(let j=0;j<SEG;j++){const th=j/SEG*Math.PI*2;
-        verts.push(n.x+n.nx*Math.cos(th)*RH, cy+Math.sin(th)*RV, n.z+n.nz*Math.cos(th)*RH);row.push(base+j);}
-      rings.push(row);}
-    for(let r=0;r<rings.length-1;r++){const Ar=rings[r],Br=rings[r+1];for(let j=0;j<SEG;j++){const j2=(j+1)%SEG;idx.push(Ar[j],Ar[j2],Br[j], Ar[j2],Br[j2],Br[j]);}}
-    const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.Float32BufferAttribute(verts,3));g.setIndex(idx);g.computeVertexNormals();
-    scene.add(new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0x0a0e1c,metalness:0.82,roughness:0.42,emissive:0x0a1830,emissiveIntensity:0.55,side:THREE.BackSide})));
-    // interior neon light-rings running the length of the tunnel
-    for(let k=-dw;k<=dw;k+=3){const i=((dc+k)%NODES+NODES)%NODES;const n=track[i];const cy=n.y+CY;const col=(k&1)?0x00e5ff:0xff2bd6;
-      const ring=new THREE.Mesh(new THREE.TorusGeometry(RH,0.32,6,SEG),new THREE.MeshBasicMaterial({color:col,fog:false}));ring.position.set(n.x,cy,n.z);ring.lookAt(n.x+n.tx,cy,n.z+n.tz);ring.scale.y=RV/RH;scene.add(ring);}
-    // bright portal arches at the entrance & exit mouths
-    for(const kk of [-dw,dw]){const i=((dc+kk)%NODES+NODES)%NODES;const n=track[i];const cy=n.y+CY;
-      const p=new THREE.Mesh(new THREE.TorusGeometry(RH+0.7,0.9,10,SEG),new THREE.MeshStandardMaterial({color:0x081024,emissive:0x00e5ff,emissiveIntensity:2.6}));p.position.set(n.x,cy,n.z);p.lookAt(n.x+n.tx,cy,n.z+n.tz);p.scale.y=RV/RH;scene.add(p);}
-    // space section — glowing hoop portals to fly through
-    const rc=Math.round(RISE_C*NODES),rw=Math.round(RISE_W*NODES*2.0);
-    for(let k=-rw;k<=rw;k+=3){const i=((rc+k)%NODES+NODES)%NODES;const n=track[i];if(n.y<14)continue;const col=(k%2)?0x00e5ff:0xff2bd6;const ring=new THREE.Mesh(new THREE.TorusGeometry(ROAD_HW+5,0.5,8,24),new THREE.MeshBasicMaterial({color:col,fog:false}));ring.position.set(n.x,n.y+3,n.z);ring.lookAt(n.x+n.tx,n.y+3,n.z+n.tz);scene.add(ring);}})();
+  // ---- glowing hoop gates strung along the climb into space (lead the eye up toward the loop) ----
+  (function(){for(let i=LOOP_L0-CLIMB_N+8;i<LOOP_L0-4;i+=6){const n=track[((i%NODES)+NODES)%NODES];if(n.y<10)continue;const col=(i&1)?0x00e5ff:0xff2bd6;
+      const ring=new THREE.Mesh(new THREE.TorusGeometry(ROAD_HW+5,0.5,8,24),new THREE.MeshBasicMaterial({color:col,fog:false}));ring.position.set(n.x+n.ux*3,n.y+n.uy*3,n.z+n.uz*3);ring.lookAt(n.x+n.tx,n.y+n.ty,n.z+n.tz);scene.add(ring);}})();
 
-  const car=makeCar();scene.add(car);applySkin(meta.skin);
+  const car=makeCar();scene.add(car);applySkin(meta.skin);car.scale.setScalar(CAR_SCALE);
   // glowing light-trail ribbon behind the car (pops under bloom)
   const TRAILN=30;const trailPos=new Float32Array(TRAILN*2*3);const trailGeo=new THREE.BufferGeometry();trailGeo.setAttribute("position",new THREE.BufferAttribute(trailPos,3));
   {const idx=[];for(let i=0;i<TRAILN-1;i++){const a=i*2,b=i*2+1,c=i*2+2,d=i*2+3;idx.push(a,b,c,b,d,c);}trailGeo.setIndex(idx);}
@@ -4866,15 +4902,17 @@ three/build/three.module.js:
       s.fireTimer-=dt;if((s.firing||keys.has("f")||keys.has(" "))&&s.fireTimer<=0){s.fireTimer=FIRE_INT;fireGuns();}
       for(const b of bolts){if(!b.active)continue;b.t+=dt;b.mesh.position.x+=b.vx*dt;b.mesh.position.z+=b.vz*dt;if(b.t>1.4){b.active=false;b.mesh.visible=false;continue;}for(const r of rivals){if(!r.alive||r.launch)continue;if(Math.hypot(b.mesh.position.x-r.mesh.position.x,b.mesh.position.z-r.mesh.position.z)<2.2){b.active=false;b.mesh.visible=false;r.hp--;fireball(b.mesh.position.x,b.mesh.position.y,b.mesh.position.z,0.7);if(r.hp<=0){addScore(120);takedown(r,r.mesh.position.x,r.mesh.position.z);}break;}}}
 
-      // ---- world transform: place car on the circuit ----
-      const pn=trackAt(s.t);const hd=Math.atan2(-pn.tx,-pn.tz);
-      const cx=pn.x+pn.nx*s.lane, cz=pn.z+pn.nz*s.lane;
-      const bob=Math.sin(time*22)*0.015*(s.speed/NITRO_SPD)+(s.air>0?0:0);
-      const slope=slopeAt(s.t);
-      // in air: nose pitches UP while rising, tips DOWN as it falls (trajectory-following); grounded: follow the slope
-      const pitch=s.air>0?Math.max(-0.55,Math.min(0.55,-s.vy*0.03)):Math.atan(slope)*0.9;
-      car.position.set(cx,pn.y+s.carY+bob,cz);car.rotation.y=hd+s.driftYaw;car.rotation.z=(-steer*0.2)+(s.driftYaw*0.3);car.rotation.x=pitch;
-      if(s.landSquash>0){const q=s.landSquash/0.2;car.scale.set(1+q*0.22,1-q*0.28,1+q*0.22);}else if(car.scale.y!==1)car.scale.set(1,1,1);
+      // ---- world transform: place & orient the car on the circuit's 3D frame (rolls upside-down through the loop) ----
+      const pn=trackAt(s.t);
+      const bob=Math.sin(time*22)*0.015*(s.speed/NITRO_SPD);
+      const off=s.carY+bob;                                        // ride height along the local up vector
+      const cx=pn.x+pn.nx*s.lane+pn.ux*off, cy=pn.y+pn.ny*s.lane+pn.uy*off, cz=pn.z+pn.nz*s.lane+pn.uz*off;
+      car.position.set(cx,cy,cz);
+      orientTo(car,pn);                                            // base orientation from the track frame
+      car.rotateY(s.driftYaw);                                     // drift slide (yaw about local up)
+      if(s.air>0)car.rotateX(Math.max(-0.55,Math.min(0.55,s.vy*0.03)));  // trajectory pitch: nose up rising, down falling
+      car.rotateZ((-steer*0.2)+(s.driftYaw*0.3));                  // lean into the corner
+      if(s.landSquash>0){const q=s.landSquash/0.2;car.scale.set(CAR_SCALE*(1+q*0.22),CAR_SCALE*(1-q*0.28),CAR_SCALE*(1+q*0.22));}else car.scale.setScalar(CAR_SCALE);
       if(carParts.flames)for(const fl of carParts.flames){const sc=0.35+s.boostVis*2.0+Math.sin(time*44)*0.07;fl.scale.set(1+s.boostVis*0.3,sc,1+s.boostVis*0.3);}
       if(carParts.flameInner)for(const fi of carParts.flameInner){const sc=0.4+s.boostVis*2.2+Math.sin(time*60)*0.08;fi.scale.set(1,sc,1);fi.material.opacity=0.5+s.boostVis*0.5;}
       if(carParts.wheels){const wr=s.speed*dt*2.4;for(const w of carParts.wheels)w.rotation.x+=wr;}
@@ -4883,7 +4921,7 @@ three/build/three.module.js:
       // light trail
       if(carParts.skinA&&carParts.skinA[0])trailMat.color.copy(carParts.skinA[0].color);
       trailMat.opacity=0.35+s.boostVis*0.4;
-      updateTrail(cx,cz,s.carY+bob);
+      updateTrail(cx,cz,cy);
 
       // ---- rivals ----
       const rubberBase=CRUISE*s.diff;s.draft=0;
@@ -4894,7 +4932,7 @@ three/build/three.module.js:
         const rb=dT0<0?1.2:(dT0>12?0.9:1.0);            // rubber-band: trailing rivals catch up
         r.spd=rubberBase*(0.6+((r.ph%1))*0.16)*rb;
         r.t=(r.t+(r.spd*dt)/Math.max(1,segLen(Math.floor(r.t))))%NODES;
-        const rn=trackAt(r.t);r.mesh.position.set(rn.x+rn.nx*r.lane,rn.y+0.1,rn.z+rn.nz*r.lane);r.mesh.rotation.set(Math.atan(slopeAt(r.t))*0.9,Math.atan2(-rn.tx,-rn.tz),0);if(r.mesh.userData.flame)r.mesh.userData.flame.scale.set(1,1+Math.sin(time*30+r.ph)*0.3,1);
+        const rn=trackAt(r.t);r.mesh.position.set(rn.x+rn.nx*r.lane+rn.ux*0.3,rn.y+rn.ny*r.lane+rn.uy*0.3,rn.z+rn.nz*r.lane+rn.uz*0.3);orientTo(r.mesh,rn);if(r.mesh.userData.flame)r.mesh.userData.flame.scale.set(1,1+Math.sin(time*30+r.ph)*0.3,1);
         let dT=((r.t-s.t+NODES)%NODES);if(dT>NODES/2){dT-=NODES;}
         const laneGap=Math.abs(r.lane-s.lane);
         if(Math.abs(dT)<0.9&&laneGap<3.0){
@@ -4922,17 +4960,20 @@ three/build/three.module.js:
 
       // ---- chase camera ----
       s.shake*=Math.pow(0.0009,dt);if(s.shake<0.01)s.shake=0;const vib=(spN*0.06+s.boostVis*0.08);const sh=s.shake+vib;
-      const behind=trackAt(s.t-CAM_DIST/NODE_SP);const aheadP=trackAt(s.t+LOOK_AHEAD/NODE_SP);
-      const camDist=CAM_DIST+s.boostVis*2.6, camH=pn.y+CAM_H+s.carY*0.5-slope*4;
-      const desiredX=behind.x+behind.nx*s.lane*0.6, desiredZ=behind.z+behind.nz*s.lane*0.6;
+      const behind=trackAt(s.t-(CAM_DIST+s.boostVis*2.6)/NODE_SP);const aheadP=trackAt(s.t+LOOK_AHEAD/NODE_SP);
+      const camOff=CAM_H+s.carY*0.5;                              // camera height along the local up (rolls through the loop)
+      const desiredX=behind.x+behind.nx*s.lane*0.6+behind.ux*camOff;
+      const desiredY=behind.y+behind.ny*s.lane*0.6+behind.uy*camOff;
+      const desiredZ=behind.z+behind.nz*s.lane*0.6+behind.uz*camOff;
       const lp=Math.min(1,dt*5);
       camera.position.x+=(desiredX-camera.position.x)*lp+(Math.random()-0.5)*sh*0.5;
+      camera.position.y+=(desiredY-camera.position.y)*lp+(Math.random()-0.5)*sh*0.35;
       camera.position.z+=(desiredZ-camera.position.z)*lp+(Math.random()-0.5)*sh*0.5;
-      camera.position.y+=((camH)-camera.position.y)*lp+(Math.random()-0.5)*sh*0.35;
       s.camLean=(s.camLean||0)+((-steer*0.05)-(s.camLean||0))*Math.min(1,dt*6);   // subtle lean into corners
-      camera.up.set(Math.sin(s.camLean),Math.cos(s.camLean),0);
-      camera.lookAt(aheadP.x,aheadP.y+1.6+s.carY*0.6,aheadP.z);
-      camFov+=((72+s.boostVis*22+spN*14)-camFov)*Math.min(1,dt*4);camera.fov=camFov;camera.updateProjectionMatrix();
+      camera.up.set(pn.ux+pn.nx*s.camLean, pn.uy+pn.ny*s.camLean, pn.uz+pn.nz*s.camLean).normalize();
+      const la=5.2+s.carY*0.6;                                    // aim well above → horizon rises, car sits low in frame
+      camera.lookAt(aheadP.x+aheadP.ux*la, aheadP.y+aheadP.uy*la, aheadP.z+aheadP.uz*la);
+      camFov+=((60+s.boostVis*20+spN*12)-camFov)*Math.min(1,dt*4);camera.fov=camFov;camera.updateProjectionMatrix();
 
       miniAcc+=dt;if(miniAcc>0.08){miniAcc=0;drawMinimap();}
     } else {
@@ -4940,8 +4981,10 @@ three/build/three.module.js:
       if(trailMesh.visible)trailMesh.visible=false;
       // idle: fly the camera along the circuit as a preview
       const tt=(time*6)%NODES;const pn=trackAt(tt);const nn=trackAt(tt+2);
-      camera.up.set(0,1,0);camera.position.set(pn.x-pn.tx*13,7,pn.z-pn.tz*13);camera.lookAt(nn.x,2,nn.z);camera.fov=70;camera.updateProjectionMatrix();
-      car.position.set(pn.x,0,pn.z);car.rotation.y=Math.atan2(-pn.tx,-pn.tz);
+      camera.up.set(pn.ux,pn.uy,pn.uz);
+      camera.position.set(pn.x-pn.tx*13+pn.ux*7, pn.y-pn.ty*13+pn.uy*7, pn.z-pn.tz*13+pn.uz*7);
+      camera.lookAt(nn.x+nn.ux*2, nn.y+nn.uy*2, nn.z+nn.uz*2);camera.fov=70;camera.updateProjectionMatrix();
+      car.position.set(pn.x+pn.ux*0.2,pn.y+pn.uy*0.2,pn.z+pn.uz*0.2);orientTo(car,pn);
     }
     renderScene();
   }
