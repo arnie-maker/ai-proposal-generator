@@ -140,15 +140,7 @@
   .tab { font-size:12px; font-weight:700; padding:7px 16px; border-radius:999px; cursor:pointer; color:#94a3b8; background:rgba(255,255,255,0.04); }
   .tab.on { color:#fff; background:linear-gradient(135deg,#4f6ef7,#8b5cf6); }
 
-  /* rotate-to-landscape prompt (this game is designed for landscape) */
-  .rotate { position:absolute; inset:0; z-index:200; display:none; flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; padding:32px; background:#05030f; }
-  .rotate .ic { font-size:58px; animation:rotp 2.2s ease-in-out infinite; }
-  @keyframes rotp { 0%,38%{transform:rotate(0)} 58%,100%{transform:rotate(90deg)} }
-  .rotate h2 { margin:0; font-size:22px; font-weight:900; }
-  .rotate p { margin:0; color:#94a3b8; font-size:14px; line-height:1.6; }
-  .rotate { cursor:pointer; }
-  .rotate .tap { margin-top:10px; font-size:13px; font-weight:800; color:#00e5ff; border:1px solid rgba(0,229,255,0.5); border-radius:999px; padding:9px 20px; }
-  /* force-landscape: when the screen is portrait, rotate the whole game so it always renders in landscape */
+  /* force-landscape: when the screen is portrait, rotate the whole game so it always renders in landscape — no prompt */
   body.forcerot #app { position:fixed; top:0; left:0; width:100vh; height:100vw; transform-origin:top left; transform:rotate(90deg) translateY(-100vw); }
 
   /* landscape / short-height tuning */
@@ -4181,7 +4173,6 @@ three/build/three.module.js:
  * ramps for big air. High speed, low chase-cam, motion blur.
  */
 (function () {
-  // rotate hint is a suggestion, never a blocker — tap anywhere on it to dismiss and play
   const THREE = window.THREE;
   function showFatal(msg){var c=document.getElementById("card");if(c)c.innerHTML='<h1 style="color:#fff;font-size:22px;margin:0 0 10px">Can’t run 3D here</h1><p style="color:#94a3b8;font-size:14px;line-height:1.5;margin:0">'+msg+'</p>';}
   if(!THREE){showFatal("The 3D engine didn’t load. Open the full-screen link and try again.");return;}
