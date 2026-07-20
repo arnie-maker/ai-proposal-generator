@@ -4404,10 +4404,10 @@ three/build/three.module.js:
   /* ============================ CIRCUIT ============================ */
   const track=[];const cumLen=[];let trackLen=0;
   // ---- vertical elevation profile: rolling hills + underground dive + soar into space ----
-  const DIVE_C=0.30, DIVE_W=0.045, RISE_C=0.63, RISE_W=0.065;   // section centres/widths (fraction of loop)
+  const DIVE_C=0.30, DIVE_W=0.058, RISE_C=0.63, RISE_W=0.065;   // section centres/widths (fraction of loop)
   function _bump(f,c,w){let d=Math.abs(f-c);d=Math.min(d,1-d);return Math.exp(-(d*d)/(w*w));}
   function elevAt(i){const a=i/NODES*Math.PI*2;const f=((i%NODES)+NODES)%NODES/NODES;
-    return 7*Math.sin(a*3+0.5)+4*Math.sin(a*5-1.1) - 34*_bump(f,DIVE_C,DIVE_W) + 78*_bump(f,RISE_C,RISE_W);}
+    return 7*Math.sin(a*3+0.5)+4*Math.sin(a*5-1.1) - 42*_bump(f,DIVE_C,DIVE_W) + 78*_bump(f,RISE_C,RISE_W);}
   (function buildTrack(){
     const pts=[];
     for(let i=0;i<NODES;i++){const a=i/NODES*Math.PI*2;const R=210+64*Math.sin(a*2+0.4)+34*Math.sin(a*3-0.9)+18*Math.sin(a*5+1.7);pts.push({x:Math.cos(a)*R,z:Math.sin(a)*R});}
@@ -4454,8 +4454,21 @@ three/build/three.module.js:
   for(let i=0;i<NODES;i+=5){const n=track[i];if(n.y>18||n.y<-6)continue;for(const s of[1,-1]){if(sr()<0.45)continue;const off=ROAD_HW+8+sr()*30;const px=n.x+n.nx*s*off, pz=n.z+n.nz*s*off;const col=SCN[Math.floor(sr()*SCN.length)];const t=sr();let m;if(t<0.3)m=makeDome(7+sr()*4,col);else if(t<0.7)m=makeBlock(9+sr()*7,12+sr()*28,9+sr()*7,col);else m=makeTower(22+sr()*20,col);m.position.set(px,n.y,pz);m.rotation.y=sr()*Math.PI*2;scene.add(m);}}
 
   // ramps + nitro pads placed ON the track
-  const ramps=[];const rampMat=new THREE.MeshStandardMaterial({color:0x223,metalness:0.7,roughness:0.4,emissive:0x00e5ff,emissiveIntensity:0.5});
-  for(let k=0;k<7;k++){const idx=Math.floor((k+0.5)/7*NODES);const n=track[idx];const ramp=new THREE.Mesh(new THREE.BoxGeometry(ROAD_HW*1.6,2.2,8),rampMat);ramp.position.set(n.x,n.y+1.0,n.z);ramp.rotation.y=Math.atan2(n.tx,n.tz);ramp.rotation.x=-0.28;scene.add(ramp);const chev=new THREE.Mesh(new THREE.BoxGeometry(ROAD_HW*1.4,0.1,1.4),new THREE.MeshBasicMaterial({color:0x00e5ff}));chev.position.set(n.x,n.y+2.0,n.z);scene.add(chev);ramps.push(idx);}
+  const ramps=[];const rampMat=new THREE.MeshStandardMaterial({color:0x2a3350,metalness:0.7,roughness:0.4,emissive:0x00e5ff,emissiveIntensity:0.65,side:THREE.DoubleSide});
+  function makeRamp(n){
+    const W=ROAD_HW*1.7, L=11, H=3.4;                     // width, length along track, kicker height
+    const ax=n.nx,az=n.nz,fx=n.tx,fz=n.tz;let vi=0;const v=[],id=[];
+    const P=(lx,ly,lz)=>{v.push(n.x+ax*lx+fx*lz, n.y+ly, n.z+az*lx+fz*lz);return vi++;};
+    // wedge: rises from y=0 at the approach (-L/2) to y=H at the lip (+L/2)
+    const A=P(-W/2,0,-L/2), B=P(-W/2,0,L/2), C=P(-W/2,H,L/2);   // left triangle
+    const D=P(W/2,0,-L/2),  E=P(W/2,0,L/2),  F=P(W/2,H,L/2);    // right triangle
+    id.push(A,B,C, D,F,E,  A,C,F, A,F,D,  A,D,E, A,E,B,  B,E,F, B,F,C);
+    const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.Float32BufferAttribute(v,3));g.setIndex(id);g.computeVertexNormals();
+    scene.add(new THREE.Mesh(g,rampMat));
+    // hazard chevrons striped up the incline
+    for(let c=0;c<3;c++){const t=(c+0.5)/3;const zz=-L/2+t*L, yy=t*H+0.16;const ch=new THREE.Mesh(new THREE.BoxGeometry(W*0.82,0.12,1.1),new THREE.MeshBasicMaterial({color:c%2?0xffd76a:0x00e5ff,fog:false}));ch.position.set(n.x+fx*zz, n.y+yy, n.z+fz*zz);ch.rotation.y=Math.atan2(fx,fz);scene.add(ch);}
+  }
+  for(let k=0;k<7;k++){const idx=Math.floor((k+0.5)/7*NODES);makeRamp(track[idx]);ramps.push(idx);}
   const nitroPads=[];for(let k=0;k<14;k++){const idx=Math.floor((k+0.3)/14*NODES);if(ramps.includes(idx))continue;const n=track[idx];const pad=new THREE.Mesh(new THREE.PlaneGeometry(ROAD_HW*1.1,3.4),new THREE.MeshBasicMaterial({color:0x33e0ff,transparent:true,opacity:0.34,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,depthWrite:false}));pad.rotation.x=-Math.PI/2;pad.rotation.z=-Math.atan2(n.tx,n.tz);pad.position.set(n.x,n.y+0.14,n.z);scene.add(pad);nitroPads.push({idx,used:0});}
   // floating coin pickups along the track
   const coinPads=[];const coinGeo=new THREE.CylinderGeometry(0.7,0.7,0.14,16);const coinMat=new THREE.MeshStandardMaterial({color:0xffd76a,emissive:0xffb43a,emissiveIntensity:1.8,metalness:0.6,roughness:0.3});
@@ -4473,9 +4486,25 @@ three/build/three.module.js:
 
   // start/finish gate
   (function(){const n=track[0];const a=Math.atan2(n.tx,n.tz);for(const s of[1,-1]){const pillar=new THREE.Mesh(new THREE.BoxGeometry(1.2,10,1.2),new THREE.MeshStandardMaterial({color:0xffd76a,emissive:0xffb43a,emissiveIntensity:2}));pillar.position.set(n.x+n.nx*s*(ROAD_HW+1),n.y+5,n.z+n.nz*s*(ROAD_HW+1));scene.add(pillar);}const bar=new THREE.Mesh(new THREE.BoxGeometry(ROAD_HW*2+4,1.2,0.6),new THREE.MeshStandardMaterial({color:0xffd76a,emissive:0xffb43a,emissiveIntensity:1.6}));bar.position.set(n.x,n.y+9.5,n.z);bar.rotation.y=a;scene.add(bar);})();
-  // ---- tunnel around the underground dive + glowing portal rings in the space section ----
-  (function(){const dc=Math.round(DIVE_C*NODES),dw=Math.round(DIVE_W*NODES*2.2);
-    for(let k=-dw;k<=dw;k+=2){const i=((dc+k)%NODES+NODES)%NODES;const n=track[i];const ring=new THREE.Mesh(new THREE.TorusGeometry(ROAD_HW+3.5,0.7,8,20),new THREE.MeshStandardMaterial({color:0x0c1024,metalness:0.6,roughness:0.4,emissive:(k%4===0?0x00e5ff:0x143050),emissiveIntensity:k%4===0?1.6:0.5}));ring.position.set(n.x,n.y+2,n.z);ring.lookAt(n.x+n.tx,n.y+2,n.z+n.tz);scene.add(ring);}
+  // ---- fully enclosed underground tunnel through the dive + glowing portal rings in the space section ----
+  (function(){const dc=Math.round(DIVE_C*NODES),dw=Math.round(DIVE_W*NODES*2.6);
+    const RH=ROAD_HW+4, RV=13, SEG=20, CY=7;            // tube half-width / half-height / cross-section res / centre lift
+    const verts=[],idx=[],rings=[];
+    for(let k=-dw;k<=dw;k++){const i=((dc+k)%NODES+NODES)%NODES;const n=track[i];const cy=n.y+CY;
+      const base=verts.length/3;const row=[];
+      for(let j=0;j<SEG;j++){const th=j/SEG*Math.PI*2;
+        verts.push(n.x+n.nx*Math.cos(th)*RH, cy+Math.sin(th)*RV, n.z+n.nz*Math.cos(th)*RH);row.push(base+j);}
+      rings.push(row);}
+    for(let r=0;r<rings.length-1;r++){const Ar=rings[r],Br=rings[r+1];for(let j=0;j<SEG;j++){const j2=(j+1)%SEG;idx.push(Ar[j],Ar[j2],Br[j], Ar[j2],Br[j2],Br[j]);}}
+    const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.Float32BufferAttribute(verts,3));g.setIndex(idx);g.computeVertexNormals();
+    scene.add(new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0x0a0e1c,metalness:0.82,roughness:0.42,emissive:0x0a1830,emissiveIntensity:0.55,side:THREE.BackSide})));
+    // interior neon light-rings running the length of the tunnel
+    for(let k=-dw;k<=dw;k+=3){const i=((dc+k)%NODES+NODES)%NODES;const n=track[i];const cy=n.y+CY;const col=(k&1)?0x00e5ff:0xff2bd6;
+      const ring=new THREE.Mesh(new THREE.TorusGeometry(RH,0.32,6,SEG),new THREE.MeshBasicMaterial({color:col,fog:false}));ring.position.set(n.x,cy,n.z);ring.lookAt(n.x+n.tx,cy,n.z+n.tz);ring.scale.y=RV/RH;scene.add(ring);}
+    // bright portal arches at the entrance & exit mouths
+    for(const kk of [-dw,dw]){const i=((dc+kk)%NODES+NODES)%NODES;const n=track[i];const cy=n.y+CY;
+      const p=new THREE.Mesh(new THREE.TorusGeometry(RH+0.7,0.9,10,SEG),new THREE.MeshStandardMaterial({color:0x081024,emissive:0x00e5ff,emissiveIntensity:2.6}));p.position.set(n.x,cy,n.z);p.lookAt(n.x+n.tx,cy,n.z+n.tz);p.scale.y=RV/RH;scene.add(p);}
+    // space section — glowing hoop portals to fly through
     const rc=Math.round(RISE_C*NODES),rw=Math.round(RISE_W*NODES*2.0);
     for(let k=-rw;k<=rw;k+=3){const i=((rc+k)%NODES+NODES)%NODES;const n=track[i];if(n.y<14)continue;const col=(k%2)?0x00e5ff:0xff2bd6;const ring=new THREE.Mesh(new THREE.TorusGeometry(ROAD_HW+5,0.5,8,24),new THREE.MeshBasicMaterial({color:col,fog:false}));ring.position.set(n.x,n.y+3,n.z);ring.lookAt(n.x+n.tx,n.y+3,n.z+n.tz);scene.add(ring);}})();
 
@@ -4717,7 +4746,7 @@ three/build/three.module.js:
     state.screen=null;applyUpgrades();
     const d=epochDay();state.firstRunToday=(meta.lastRunDay!==d);meta.lastRunDay=d;saveMeta();
     state.phase="playing";state.t=0.5;state.lane=0;state.speed=CRUISE*0.5;state.steer=0;state.drift=0;state.nitroOn=0;state.nitro=0.35;state.driftYaw=0;
-    state.score=0;state.takedowns=0;state.hp=MAXHP;state.lap=1;state.carY=0;state.vy=0;state.air=0;state.shake=0;state.invuln=1;state.hurtT=0;
+    state.score=0;state.takedowns=0;state.hp=MAXHP;state.lap=1;state.carY=0;state.vy=0;state.air=0;state.airT=0;state.landSquash=0;state.shake=0;state.invuln=1;state.hurtT=0;car.scale.set(1,1,1);
     state.mult=1;state.chain=0;state.chainT=0;state.maxChain=0;state.driftTime=0;state.nitroTime=0;state.dist=0;state.topSpeed=0;state.coinsRun=0;state.newBest=false;state.crateOpened=false;
     state.driftHold=0;state.hitStop=0;state.hitThisRun=false;state.gambled=false;state.diff=1;state.firing=0;state.fireTimer=0;bolts.forEach(b=>{b.active=false;b.mesh.visible=false;});
     state.gas=0;state.braking=0;state.od=0;state.odActive=0;state.draft=0;state.pw={shield:0,x2:0,magnet:0};applyControlMode();powerups.forEach(p=>{p.used=0;p.mesh.visible=true;});
@@ -4802,15 +4831,26 @@ three/build/three.module.js:
 
       // ---- advance along the circuit ----
       const adv=s.speed*dt;s.dist+=Math.max(0,adv);if(adv>0)missionEvent("dist",adv);
-      const sl=segLen(s.t);s.t+=adv/Math.max(1,sl);
+      const prevT=s.t;const sl=segLen(s.t);s.t+=adv/Math.max(1,sl);
       if(s.t<0)s.t+=NODES;                                    // reversed past the start line — wrap, no lap
       if(s.t>=NODES){s.t-=NODES;s.lap++;
         if(s.mode!=="endless"&&s.lap>LAPS_TOTAL){endGame(true);}
         else{s.diff=1+(s.lap-1)*0.1;if(s.mode==="endless"){addScore(300);toast("LAP "+s.lap+" · +300","#ffd76a");el.lap.textContent=s.lap;}else{toast("LAP "+s.lap+"/"+LAPS_TOTAL,"#ffd76a");el.lap.textContent=s.lap;}}}
 
-      // ---- ramps: launch into the air ----
-      for(const ri of ramps){let d=Math.abs(((s.t-ri+NODES)%NODES));if(d>NODES/2)d=NODES-d;if(d<0.6&&s.air<=0&&Math.abs(s.lane)<ROAD_HW){s.air=1;s.vy=8+ s.speed*0.05;audio.power();toast("BIG AIR!","#00e5ff");meta.tot.air++;missionEvent("air",1);checkAch();}}
-      if(s.air>0){s.carY+=s.vy*dt;s.vy-=22*dt;if(s.carY<=0){s.carY=0;s.vy=0;s.air=0;shakeAdd(0.25);puffSmoke(car.position.x,0.3,car.position.z,0xcccccc);}}
+      // ---- ramps: launch into the air (crossing test — never skipped even at overdrive speed) ----
+      if(s.air<=0&&Math.abs(s.lane)<ROAD_HW+2){for(const ri of ramps){
+        let a=((prevT-ri)%NODES+NODES)%NODES;if(a>NODES/2)a-=NODES;                        // signed node-dist: prev → ramp lip
+        let c=((s.t-ri)%NODES+NODES)%NODES;if(c>NODES/2)c-=NODES;                           // signed node-dist: now  → ramp lip
+        if(a<0&&c>=0&&(c-a)<NODES/2){s.air=1;s.vy=13+s.speed*0.11;s.airT=0;audio.power();toast("BIG AIR!","#00e5ff");shakeAdd(0.2);meta.tot.air++;missionEvent("air",1);checkAch();break;}
+      }}
+      if(s.air>0){s.airT=(s.airT||0)+dt;s.carY+=s.vy*dt;s.vy-=20*dt;                     // lunar-light gravity → long floaty arc
+        if(s.carY<=0){const impact=Math.min(1,(-s.vy)/24);s.carY=0;s.air=0;
+          shakeAdd(0.22+impact*0.45);s.landSquash=0.2;                                    // heavy landing thump
+          for(let q=0;q<5;q++)puffSmoke(car.position.x+(Math.random()-0.5)*3.2,0.3,car.position.z+(Math.random()-0.5)*3.2,0xccd4e4);
+          audio.power&&audio.power();
+          if(s.airT>1.0){const b=Math.round(150+s.airT*120);addScore(b);addNitro(0.14);popup("PERFECT LANDING +"+b,0x8affff,car.position.x,2.6,car.position.z);s.speed*=1.06;}
+          s.vy=0;}}
+      if(s.landSquash>0)s.landSquash=Math.max(0,s.landSquash-dt);
 
       // ---- nitro pads ----
       for(const p of nitroPads){let d=Math.abs(((s.t-p.idx+NODES)%NODES));if(d>NODES/2)d=NODES-d;if(d<0.7&&!p.used){p.used=1;addNitro(0.3*NITRO_MUL);audio.coin();setTimeout(()=>p.used=0,4000);}}
@@ -4830,8 +4870,11 @@ three/build/three.module.js:
       const pn=trackAt(s.t);const hd=Math.atan2(-pn.tx,-pn.tz);
       const cx=pn.x+pn.nx*s.lane, cz=pn.z+pn.nz*s.lane;
       const bob=Math.sin(time*22)*0.015*(s.speed/NITRO_SPD)+(s.air>0?0:0);
-      const slope=slopeAt(s.t);const pitch=s.air>0?-Math.max(-0.4,Math.min(0.4,s.vy*0.02)):Math.atan(slope)*0.9;
+      const slope=slopeAt(s.t);
+      // in air: nose pitches UP while rising, tips DOWN as it falls (trajectory-following); grounded: follow the slope
+      const pitch=s.air>0?Math.max(-0.55,Math.min(0.55,-s.vy*0.03)):Math.atan(slope)*0.9;
       car.position.set(cx,pn.y+s.carY+bob,cz);car.rotation.y=hd+s.driftYaw;car.rotation.z=(-steer*0.2)+(s.driftYaw*0.3);car.rotation.x=pitch;
+      if(s.landSquash>0){const q=s.landSquash/0.2;car.scale.set(1+q*0.22,1-q*0.28,1+q*0.22);}else if(car.scale.y!==1)car.scale.set(1,1,1);
       if(carParts.flames)for(const fl of carParts.flames){const sc=0.35+s.boostVis*2.0+Math.sin(time*44)*0.07;fl.scale.set(1+s.boostVis*0.3,sc,1+s.boostVis*0.3);}
       if(carParts.flameInner)for(const fi of carParts.flameInner){const sc=0.4+s.boostVis*2.2+Math.sin(time*60)*0.08;fi.scale.set(1,sc,1);fi.material.opacity=0.5+s.boostVis*0.5;}
       if(carParts.wheels){const wr=s.speed*dt*2.4;for(const w of carParts.wheels)w.rotation.x+=wr;}
