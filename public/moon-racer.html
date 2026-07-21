@@ -31,7 +31,7 @@
   .label { font-size:9px; letter-spacing:.18em; text-transform:uppercase; color:#64748b; }
   .score { font-size:22px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1.05; display:inline-block; transform-origin:left center; will-change:transform; }
   /* big juicy centre banner for milestones & HEAT tier-ups */
-  .bigban { position:absolute; left:50%; top:34%; transform:translate(-50%,-50%) scale(0.4); opacity:0; font-size:44px; font-weight:900; letter-spacing:.02em; white-space:nowrap; text-shadow:0 0 24px rgba(255,180,80,0.9),0 4px 16px rgba(0,0,0,0.6); transition:transform .22s cubic-bezier(.2,1.4,.4,1), opacity .2s; }
+  .bigban { position:absolute; left:50%; top:15%; transform:translate(-50%,-50%) scale(0.6); opacity:0; font-size:26px; font-weight:900; letter-spacing:.02em; white-space:nowrap; text-shadow:0 0 18px rgba(255,180,80,0.85),0 3px 12px rgba(0,0,0,0.6); transition:transform .2s cubic-bezier(.2,1.4,.4,1), opacity .18s; }
   .bigban.show { transform:translate(-50%,-50%) scale(1); opacity:1; }
   .bigban.out { transform:translate(-50%,-64%) scale(1.15); opacity:0; transition:transform .5s ease, opacity .5s ease; }
   .chip { pointer-events:auto; padding:7px 11px; font-size:12px; font-weight:700; color:#e2e8f0; cursor:pointer; border-radius:12px; }
@@ -56,14 +56,22 @@
   .heatbig .hl { font-size:10px; font-weight:800; letter-spacing:.22em; color:#ff8a5a; margin-top:2px; }
   .heatbig.hot { animation:heatpulse .5s ease infinite; }
   @keyframes heatpulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.12)} }
+  .heatbig.bump { animation:heatbump .26s ease; }
+  @keyframes heatbump { 0%{transform:scale(1)} 40%{transform:scale(1.45)} 100%{transform:scale(1)} }
   /* speed / heat euphoria vignette — the world tunnels & glows red-hot when you're "in the zone" */
   .heatvig { pointer-events:none; position:absolute; inset:0; opacity:0; transition:opacity .25s ease;
     background:radial-gradient(ellipse at 50% 60%, transparent 40%, rgba(255,60,30,0.18) 100%),
                radial-gradient(ellipse at 50% 120%, rgba(255,120,40,0.16), transparent 55%); }
   .heatflash { pointer-events:none; position:absolute; inset:0; opacity:0; background:radial-gradient(ellipse at 50% 55%, rgba(255,200,120,0.5), transparent 60%); }
   /* dim the session-mission chips during play so YOUR car & the action stay the focus */
-  body.playing .missions { opacity:0.42; transition:opacity .3s; }
-  body.playing .missions:hover { opacity:0.9; }
+  body.playing .missions { display:none; }   /* keep the driving view clean — goals live on the start card + the compact career chip */
+  /* one small, non-blocking objective line at the very top during play */
+  .careerchip { pointer-events:none; position:absolute; top:calc(env(safe-area-inset-top) + 8px); left:50%; transform:translateX(-50%); display:none; font-size:12px; font-weight:700; color:#cbd5e1; background:rgba(8,10,20,0.5); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); border:1px solid rgba(255,255,255,0.08); padding:5px 14px; border-radius:999px; white-space:nowrap; max-width:80vw; overflow:hidden; text-overflow:ellipsis; }
+  body.playing .careerchip { display:block; }
+  .careercard { margin:8px 0 2px; padding:10px 14px; border-radius:14px; background:linear-gradient(135deg,rgba(0,229,255,0.1),rgba(139,92,246,0.12)); border:1px solid rgba(0,229,255,0.28); text-align:left; }
+  .careercard .ct { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:#8affff; font-weight:800; }
+  .careercard .cg { font-size:15px; font-weight:800; margin:2px 0; color:#eef3ff; }
+  .careercard .cr { font-size:11px; color:#9fb0d0; }
   /* PERFECT LAUNCH timing bar (start-of-race ritual) */
   .launchui { position:absolute; left:50%; top:38%; transform:translateX(-50%); display:none; flex-direction:column; align-items:center; gap:8px; pointer-events:none; z-index:6; }
   .launchui.on { display:flex; }
@@ -211,6 +219,7 @@
     </div>
   </div>
   <div class="missions" id="missions"></div>
+  <div class="careerchip" id="careerChip"></div>
   <div class="combo" id="combo"></div>
 
   <div class="glass minimap" id="minimap"><canvas id="miniCv" width="116" height="116"></canvas></div>
@@ -4246,8 +4255,8 @@ three/build/three.module.js:
   const BASE={cruise:116,nitroSpd:205,accel:110,turn:32,hp:3};
   let CRUISE=BASE.cruise, NITRO_SPD=BASE.nitroSpd, ACCEL=BASE.accel, TURN_LANE=BASE.turn, MAXHP=BASE.hp;
   const REV_SPD=-26, OVER_SPD=215, OD_TIME=5;   // reverse, overdrive top speed, overdrive duration
-  const CAM_DIST=6.8, CAM_H=2.3, LOOK_AHEAD=16;   // close + low + narrow FOV → car reads big and sits low in frame
-  const CAR_SCALE=1.32;                            // enlarge the car model so it dominates the lower frame
+  const CAM_DIST=6.2, CAM_H=2.05, LOOK_AHEAD=15;  // close + low → car reads big and dominant
+  const CAR_SCALE=1.5;                             // large hero car — clearly YOUR vehicle
   const LAPS_TOTAL=3;
   const HEAT_MAX=12;                        // top HEAT score-multiplier (risk → reward, wiped on crash)
   const SKINS=[
@@ -4301,6 +4310,25 @@ three/build/three.module.js:
     {id:"maxup",name:"Fully Loaded",d:"Max an upgrade",rew:300,chk:m=>Object.values(m.up).some(v=>v>=5)},
     {id:"rich",name:"Tycoon",d:"Bank 5000 coins",rew:250,chk:m=>m.coins>=5000}
   ];
+
+  /* ==================== CAREER — a single clear next goal + reward, always pulling you forward ==================== */
+  const CAREER=[
+    {g:"Finish your first race",m:x=>x.tot.wins,goal:1,rew:800},
+    {g:"Take down 10 racers",m:x=>x.tot.td,goal:10,rew:1000},
+    {g:"Score 12,000 in one run",m:x=>x.best,goal:12000,rew:1200},
+    {g:"Hit 400 km/h",m:x=>x.tot.top,goal:400,rew:1000},
+    {g:"Catch 12 big airs",m:x=>x.tot.air,goal:12,rew:1400},
+    {g:"Race 15,000 m total",m:x=>x.tot.dist,goal:15000,rew:1600},
+    {g:"Win 3 races",m:x=>x.tot.wins,goal:3,rew:2000},
+    {g:"Score 25,000 in one run",m:x=>x.best,goal:25000,rew:2600},
+    {g:"Reach Rank Pro",m:x=>x.best,goal:18000,rew:2200},
+    {g:"50 takedowns",m:x=>x.tot.td,goal:50,rew:3200},
+    {g:"Score 45,000 in one run",m:x=>x.best,goal:45000,rew:4500},
+    {g:"Win 10 races",m:x=>x.tot.wins,goal:10,rew:6000}
+  ];
+  function careerCur(){const i=Math.min(meta.career||0,CAREER.length-1);const done=(meta.career||0)>=CAREER.length;const st=CAREER[i];const cur=Math.min(st.goal,st.m(meta));return {i,st,cur,pct:Math.min(100,Math.round(cur/st.goal*100)),done};}
+  function checkCareer(){let adv=null;while((meta.career||0)<CAREER.length){const st=CAREER[meta.career||0];if(st.m(meta)>=st.goal){meta.coins+=st.rew;meta.career=(meta.career||0)+1;adv=st;}else break;}if(adv){saveMeta();updateMetaHud();}return adv;}
+  function updateCareerChip(){if(!el.careerChip)return;const c=careerCur();el.careerChip.innerHTML=c.done?'🏆 CAREER COMPLETE':'🎯 <b>'+c.st.g+'</b> <span style="color:#8affff">'+c.cur.toLocaleString()+'/'+c.st.goal.toLocaleString()+'</span>';}
 
   /* ==================== PROCEDURAL CONTENT ENGINE — 10 categories × 1,000+ each (10,000+ items) ==================== */
   const GEN=(function(){
@@ -4411,6 +4439,7 @@ three/build/three.module.js:
     m.dc=m.dc||{day:0,done:false,def:null};m.crateDry=m.crateDry||0;m.lastRank=m.lastRank||0;
     m.throttle=m.throttle||"auto";m.steerMode=m.steerMode||"wheel";
     m.circuit=m.circuit||1;m.liveryIndex=(m.liveryIndex==null?null:m.liveryIndex);m.trailIndex=(m.trailIndex==null?null:m.trailIndex);   // [content] procedural picks
+    m.career=m.career||0;   // [career] current goal index
     return m;}
   const meta=loadMeta();
   function saveMeta(){try{LS.set("save",JSON.stringify(meta));}catch(e){}}
@@ -4425,7 +4454,7 @@ three/build/three.module.js:
     popups:$("popups"),toasts:$("toasts"),overlay:$("overlay"),card:$("card"),wheel:$("wheel"),wheelKnob:$("wheelKnob"),nitroBtn:$("nitroBtn"),driftBtn:$("driftBtn"),fireBtn:$("fireBtn"),
     gasBtn:$("gasBtn"),brakeBtn:$("brakeBtn"),odFill:$("odFill"),odbar:$("odbar"),draftInd:$("draftInd"),miniCv:$("miniCv"),
     rlFill:$("rlFill"),heatBig:$("heatBig"),heatBigV:$("heatBigV"),heatVig:$("heatVig"),heatFlash:$("heatFlash"),
-    launchUI:$("launchUI"),launchMark:$("launchMark"),launchTxt:$("launchTxt")};
+    launchUI:$("launchUI"),launchMark:$("launchMark"),launchTxt:$("launchTxt"),careerChip:$("careerChip")};
   let tiltOn=false,tiltZero=null;
   function enableTilt(){if(tiltOn)return;const go=()=>{tiltOn=true;window.addEventListener("deviceorientation",(e)=>{if(meta.steerMode!=="tilt"||e.gamma==null)return;if(tiltZero==null)tiltZero=e.gamma;let g=(e.gamma-tiltZero);state.steer=Math.max(-1,Math.min(1,g/22));});};
     try{if(typeof DeviceOrientationEvent!=="undefined"&&DeviceOrientationEvent.requestPermission){DeviceOrientationEvent.requestPermission().then(r=>{if(r==="granted")go();}).catch(()=>{});}else go();}catch(e){}}
@@ -4486,7 +4515,7 @@ three/build/three.module.js:
   try{const pm=new THREE.PMREMGenerator(renderer);const es=new THREE.Scene();es.add(new THREE.Mesh(new THREE.SphereGeometry(40,12,10),new THREE.MeshBasicMaterial({color:0x0a0824,side:THREE.BackSide})));[[0x00e5ff,10,8,-12],[0xff2bd6,-12,6,10],[0xffe08a,0,16,4],[0x66ffcc,8,-4,12]].forEach(a=>{const pl=new THREE.Mesh(new THREE.PlaneGeometry(16,16),new THREE.MeshBasicMaterial({color:a[0]}));pl.position.set(a[1],a[2],a[3]);pl.lookAt(0,0,0);es.add(pl);});scene.environment=pm.fromScene(es,0,0.1,80).texture;}catch(e){}
   // post-processing: neon bloom
   let composer=null,bloom=null;
-  function buildComposer(){try{if(!window.THREEPP)return;const w=app.clientWidth||360,h=app.clientHeight||640;composer=new THREEPP.EffectComposer(renderer);composer.setPixelRatio(1);composer.addPass(new THREEPP.RenderPass(scene,camera));bloom=new THREEPP.UnrealBloomPass(new THREE.Vector2(Math.round(w/2),Math.round(h/2)),0.72,0.62,0.72);composer.addPass(bloom);composer.setSize(w,h);}catch(e){composer=null;}}   // [gfx] punchier neon bloom
+  function buildComposer(){try{if(!window.THREEPP)return;const w=app.clientWidth||360,h=app.clientHeight||640;composer=new THREEPP.EffectComposer(renderer);composer.setPixelRatio(1);composer.addPass(new THREEPP.RenderPass(scene,camera));bloom=new THREEPP.UnrealBloomPass(new THREE.Vector2(Math.round(w/2),Math.round(h/2)),0.5,0.6,0.8);composer.addPass(bloom);composer.setSize(w,h);}catch(e){composer=null;}}   // [gfx] cleaner bloom (higher threshold → road/car stay readable)
   buildComposer();
   function renderScene(){if(composer)composer.render();else renderer.render(scene,camera);}
 
@@ -4526,7 +4555,7 @@ three/build/three.module.js:
   let _shootTimer=5;
   function gfxTick(time,dt){
     const heatN=Math.max(0,Math.min(1,((state.heat||1)-1)/(HEAT_MAX-1)));
-    for(const e of neonMats)e.m.emissiveIntensity=e.base*(0.82+0.26*Math.sin(time*2.4+e.ph)+heatN*0.28);   // [gfx] neon breathing
+    for(const e of neonMats)e.m.emissiveIntensity=e.base*(0.9+0.12*Math.sin(time*1.8+e.ph)+heatN*0.15);   // [gfx] gentle neon breathing
     if(twinkleMat)twinkleMat.opacity=0.5+0.42*Math.abs(Math.sin(time*3));                                    // [gfx] star twinkle
     rim.color.setHSL((0.5+0.04*Math.sin(time*0.2))%1,0.9,0.55);rim2.color.setHSL((0.86+0.04*Math.sin(time*0.17+2))%1,0.9,0.6); // [gfx] living sky hue
     gridMat.opacity=0.1+0.05*Math.sin(time*1.4)+heatN*0.06;                                                  // [gfx] grid pulse
@@ -4766,9 +4795,11 @@ three/build/three.module.js:
   function _updScore(){el.score.textContent=state.score.toLocaleString();if(state.score>meta.best)el.best.textContent=state.score.toLocaleString();}
   function addScore(n){n=Math.round(n*(state.odActive>0?2:1)*(state.pw&&state.pw.x2>0?2:1)*Math.max(1,state.heat||1));if(n<=0)return;state.score+=n;_updScore();if(n>=40)_scorePunch=Math.min(1,_scorePunch+0.6);checkMilestone();}
   function checkMilestone(){if(state.score>=state.nextMile){const m=state.nextMile;state.nextMile+= (m>=50000?25000:m>=20000?10000:5000);bigBanner("★ "+m.toLocaleString()+" ★","#ffd76a");audio.fanfare&&audio.fanfare();shakeAdd(0.35);flashHeat&&flashHeat();for(let i=0;i<3;i++)setTimeout(()=>{if(state.phase==="playing")splat(car.position.x,1.2,car.position.z,0xffd76a,10);},i*90);}}
-  function heatTierUp(t){bigBanner("🔥 HEAT ×"+t,"#ff7a3c");audio.fanfare&&audio.fanfare();audio.ding&&audio.ding(t+6);shakeAdd(0.28);flashHeat&&flashHeat();}
-  // big juicy centre banner (scale-in punch, fades). Pooled-lite: one node per call, auto-removed.
-  function bigBanner(text,color){const d=document.createElement("div");d.className="bigban";d.textContent=text;d.style.color=color||"#fff";el.popups.appendChild(d);requestAnimationFrame(()=>d.classList.add("show"));setTimeout(()=>{d.classList.add("out");},600);setTimeout(()=>d.remove(),1100);}
+  // HEAT tier-up: NO centre banner (that was blocking the car) — just a quick badge flash + a soft ding
+  function heatTierUp(t){audio.ding&&audio.ding(t+6);_heatFlashT=0.28;if(el.heatBig)el.heatBig.classList.add("bump"),setTimeout(()=>el.heatBig&&el.heatBig.classList.remove("bump"),260);}
+  // small top banner (never over the car), throttled so it can't spam
+  let _banT=-999;
+  function bigBanner(text,color){const now=state.dist||0;if(now-_banT<150)return;_banT=now;const d=document.createElement("div");d.className="bigban";d.textContent=text;d.style.color=color||"#fff";el.popups.appendChild(d);requestAnimationFrame(()=>d.classList.add("show"));setTimeout(()=>{d.classList.add("out");},550);setTimeout(()=>d.remove(),1000);}
   let _heatFlashT=0;function flashHeat(){_heatFlashT=0.5;}
   function addNitro(n){state.nitro=Math.min(1,state.nitro+n);}
   function takedown(r,wx,wz){if(!r.alive)return;r.alive=false;
@@ -4848,6 +4879,7 @@ three/build/three.module.js:
       el.card.innerHTML='<h1 class="gradient-text">MOON RACER</h1>'+
         '<div><span class="rankpill" style="background:'+rk.c+'22;color:'+rk.c+'" id="nameBtn">'+rk.n+nm+' ✏️</span>'+pst+'</div>'+streakLine+
         '<div class="row"><div class="stat"><div class="v">'+meta.best.toLocaleString()+'</div><div class="l">Best</div></div><div class="stat"><div class="v" style="color:#ffd76a">'+meta.coins.toLocaleString()+'</div><div class="l">Coins</div></div><div class="stat"><div class="v">'+meta.owned.length+'/'+SKINS.length+'</div><div class="l">Ships</div></div></div>'+
+        (function(){const c=careerCur();if(c.done)return '<div class="careercard"><div class="ct">🏆 CAREER COMPLETE</div></div>';return '<div class="careercard"><div class="ct">🎯 CAREER · Goal '+(c.i+1)+'/'+CAREER.length+'</div><div class="cg">'+c.st.g+'</div><div class="xpbar" style="margin:5px 0 3px"><div style="height:100%;width:'+c.pct+'%;background:linear-gradient(90deg,#00e5ff,#8b5cf6);border-radius:999px"></div></div><div class="cr">'+c.cur.toLocaleString()+' / '+c.st.goal.toLocaleString()+' · reward <b style="color:#ffd76a">+'+c.st.rew.toLocaleString()+'💰</b></div></div>';})()+
         xpBar()+ dc+
         (spinAvail?'<button class="tab" id="spinBtn" style="margin:6px 0;padding:9px 16px;color:#ffd76a;border:1px solid rgba(255,215,106,0.5)">🎡 Daily Spin — free coins!</button>':'')+
         '<div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#7c8bb0;margin-top:8px">Session goals</div>'+missionPreview()+
@@ -4872,6 +4904,7 @@ three/build/three.module.js:
       if(!state.crateOpened){crateHtml='<div style="font-size:11px;color:#94a3b8;margin-top:8px">Tap the crate for a bonus!</div><div class="crate" id="crateBtn">🎁</div>';}
       else{crateHtml='<div style="margin-top:8px;font-weight:800;color:'+crateCol+'">'+state.crateTier+' crate · +'+state.crateReward+'💰</div>'+(state.gambled?'':'<div class="rowbtns"><button class="tab" id="gambleBtn" style="border:1px solid rgba(255,43,214,0.5);color:#ff9de6">🎲 Double or Nothing (50/50)</button></div>');}
       el.card.innerHTML='<h1 class="gradient-text">'+(won?"FINISH! 🏁":"WRECKED")+'</h1>'+
+        (state.careerAdv?'<div style="color:#8affff;font-weight:800;margin:2px 0 4px">🎯 CAREER GOAL! '+state.careerAdv.g+' — +'+state.careerAdv.rew.toLocaleString()+'💰</div>':'')+
         (state.newBest?'<div style="color:#ffd76a;font-weight:800;margin:2px 0 4px">🏆 NEW BEST!</div>':'')+
         (state.rankUp?'<div style="color:#8affff;font-weight:800;margin:2px 0 4px">⬆️ RANK UP — '+state.rankUp+'!</div>':'')+
         '<div style="font-size:12px;color:#9fd8ff;margin:2px 0 4px">Leaderboard: <b>#'+state.lbRank+'</b> · faster than '+Math.max(1,Math.round((1-(state.lbRank/Math.max(state.lbRank,meta.lb.length)))*100))+'%</div>'+
@@ -5004,7 +5037,7 @@ three/build/three.module.js:
     state.launchT=1.4;state.launchLocked=0;showLaunch();
     state.dcTask=(meta.dc&&meta.dc.def&&!meta.dc.done)?{ev:meta.dc.def.ev,goal:meta.dc.def.n,once:meta.dc.def.once,rew:meta.dc.def.rew,prog:0,done:false}:null;
     el.score.textContent="0";el.takedowns.textContent="💥 0";el.lap.textContent=state.mode==="endless"?"∞":"1";el.pos.textContent="P1";
-    car.visible=true;resetTrail();rollMissions();nitroPads.forEach(p=>p.used=0);coinPads.forEach(p=>{p.used=0;p.mesh.visible=true;});placeRivals();renderOverlay();
+    car.visible=true;resetTrail();rollMissions();updateCareerChip();nitroPads.forEach(p=>p.used=0);coinPads.forEach(p=>{p.used=0;p.mesh.visible=true;});placeRivals();renderOverlay();
   }
   function endGame(won){
     if(state.phase!=="playing")return;
@@ -5020,6 +5053,7 @@ three/build/three.module.js:
     state.xpGain=Math.floor(state.score/12)+state.takedowns*15+(won?120:0)+state.maxChain*10;gainXP(state.xpGain);
     state.lbRank=submitScore(state.score);
     const nr=rankOf(meta.best);const oldRank=meta.lastRank||0;const newRankIdx=RANKS.findIndex(x=>x[1]===nr.n);if(newRankIdx>oldRank){meta.lastRank=newRankIdx;state.rankUp=nr.n;}else state.rankUp=null;
+    state.careerAdv=checkCareer();   // advanced a career goal this run?
     saveMeta();updateMetaHud();checkAch();updateMissionUI();
     audio.crash();if(!won){carExplode(car.position.x,car.position.y+0.5,car.position.z,0xff6a2a);car.visible=false;}else{boomFX(car.position.x,car.position.y+1,car.position.z,1.6);}
     renderOverlay();
@@ -5134,7 +5168,7 @@ three/build/three.module.js:
       if(s.coinComboT>0){s.coinComboT-=dt;if(s.coinComboT<=0)s.coinCombo=0;}
       for(const p of coinPads){if(p.mesh.visible)p.mesh.rotation.z+=dt*4;let d=Math.abs(((s.t-p.idx+NODES)%NODES));if(d>NODES/2)d=NODES-d;if(d<1.0&&!p.used&&Math.abs(p.lane-s.lane)<magR){p.used=1;p.mesh.visible=false;
         s.coinCombo=(s.coinCombo||0)+1;s.coinComboT=1.6;const c=Math.round((16+Math.floor(Math.random()*18))*COIN_MUL);addCoins(c);s.coinsRun+=c;addScore(30+s.coinCombo*6);
-        popup("+"+c+"💰"+(s.coinCombo>2?" ×"+s.coinCombo:""),0xffd76a,p.mesh.position.x,2,p.mesh.position.z);
+        if(s.coinCombo===1||s.coinCombo%4===0)popup("+"+c+"💰"+(s.coinCombo>2?" ×"+s.coinCombo:""),0xffd76a,p.mesh.position.x,2,p.mesh.position.z);   // only the occasional popup — no spam
         splat(p.mesh.position.x,1.4,p.mesh.position.z,0xffd76a,5);audio.ding&&audio.ding(s.coinCombo);
         setTimeout(()=>{if(state.phase==="playing"){p.used=0;p.mesh.visible=true;}},3200);}}
       // power-ups
@@ -5211,8 +5245,8 @@ three/build/three.module.js:
       el.heatBigV.textContent="×"+s.heat.toFixed(1);el.heatBig.classList.toggle("hot",s.heat>=3);
       el.heatBig.style.transform="scale("+(1+heatN*0.5).toFixed(3)+")";
       if(el.rlFill)el.rlFill.style.width=(s.redline*100)+"%";
-      el.heatVig.style.opacity=(Math.min(1,heatN*1.1)*0.85+spN*0.15).toFixed(2);
-      if(bloom)bloom.strength=0.72+heatN*0.5+s.boostVis*0.3;   // the glow swells as you heat up
+      el.heatVig.style.opacity=(Math.min(1,heatN)*0.42+spN*0.1).toFixed(2);   // subtle — never a red soup over the road
+      if(bloom)bloom.strength=0.5+heatN*0.28+s.boostVis*0.22;
       if(_heatFlashT>0){_heatFlashT=Math.max(0,_heatFlashT-dt);el.heatFlash.style.opacity=(_heatFlashT).toFixed(2);}else if(el.heatFlash.style.opacity!=="0")el.heatFlash.style.opacity="0";
       audio.setEngineIntensity(spN);
       if(s.invuln>0)s.invuln-=dt;if(s.hurtT>0){s.hurtT-=dt;el.hurtFlash.style.opacity=s.hurtT.toFixed(2);}else el.hurtFlash.style.opacity="0";
@@ -5230,25 +5264,26 @@ three/build/three.module.js:
       const camOff=CAM_H+s.carY*0.5+loopness*10;                  // rise above the loop for a clean wide vantage
       // swing the camera sideways OPPOSITE the turn (like a real chase rig whipping through a corner) → you feel the steer
       const swing=s.camSwing*(1-loopness);
-      const desiredX=behind.x+behind.nx*(s.lane*0.6 - swing*4.5);
+      // track the car tightly (0.85) so it stays framed and the WORLD sweeps when you steer → reads as carving, not sliding
+      const desiredX=behind.x+behind.nx*(s.lane*0.85 - swing*2.6);
       const desiredY=behind.y+camOff;                            // world-up height (stable, never inverts)
-      const desiredZ=behind.z+behind.nz*(s.lane*0.6 - swing*4.5);
-      const lp=Math.min(1,dt*5);
-      camera.position.x+=(desiredX-camera.position.x)*lp+(Math.random()-0.5)*sh*0.5;
-      camera.position.y+=(desiredY-camera.position.y)*lp+(Math.random()-0.5)*sh*0.35;
-      camera.position.z+=(desiredZ-camera.position.z)*lp+(Math.random()-0.5)*sh*0.5;
-      s.camLean=(s.camLean||0)+((-swing*0.14)-(s.camLean||0))*Math.min(1,dt*6);   // roll into corners (banking)
+      const desiredZ=behind.z+behind.nz*(s.lane*0.85 - swing*2.6);
+      const lp=Math.min(1,dt*7);                                 // snappier, more connected camera
+      camera.position.x+=(desiredX-camera.position.x)*lp+(Math.random()-0.5)*sh*0.4;
+      camera.position.y+=(desiredY-camera.position.y)*lp+(Math.random()-0.5)*sh*0.3;
+      camera.position.z+=(desiredZ-camera.position.z)*lp+(Math.random()-0.5)*sh*0.4;
+      s.camLean=(s.camLean||0)+((-swing*0.12)-(s.camLean||0))*Math.min(1,dt*6);   // roll into corners (banking)
       camera.up.set(s.camLean,1,0).normalize();                  // keep upright — car is always identifiable
-      const la=5.2+s.carY*0.6;
-      // flat: aim ahead & up (car sits low in frame). loop: aim AT the car so it stays centred & visible.
-      const tX=aheadP.x+aheadP.ux*la, tY=aheadP.y+aheadP.uy*la, tZ=aheadP.z+aheadP.uz*la;
+      const la=4.6+s.carY*0.6;
+      // aim just ahead of the car AND follow its lane a little so the car sits low-centre and clearly steers
+      const tX=aheadP.x+aheadP.ux*la+pn.nx*s.lane*0.5, tY=aheadP.y+aheadP.uy*la, tZ=aheadP.z+aheadP.uz*la+pn.nz*s.lane*0.5;
       camera.lookAt(tX+(cx-tX)*loopness, tY+(cy+2-tY)*loopness, tZ+(cz-tZ)*loopness);
-      // FOV punches out with speed / boost / HEAT and with bullet-time zooms IN → visceral sense of velocity
+      // calmer FOV so the motion is legible (no nauseating zoom) — still lifts a touch with speed
       const heatNc=(s.heat-1)/(HEAT_MAX-1);
-      const fovTarget=(s.slowmo>0?52:62)+s.boostVis*22+spN*14+heatNc*8;
+      const fovTarget=(s.slowmo>0?56:64)+s.boostVis*12+spN*8+heatNc*3;
       camFov+=(fovTarget-camFov)*Math.min(1,dt*4);camera.fov=camFov;camera.updateProjectionMatrix();
 
-      miniAcc+=dt;if(miniAcc>0.08){miniAcc=0;drawMinimap();}
+      miniAcc+=dt;if(miniAcc>0.08){miniAcc=0;drawMinimap();updateCareerChip();}
     } else {
       if(el.speedBlur.style.opacity!=="0")el.speedBlur.style.opacity="0";
       if(trailMesh.visible)trailMesh.visible=false;
