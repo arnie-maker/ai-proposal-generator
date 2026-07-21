@@ -4302,6 +4302,49 @@ three/build/three.module.js:
     {id:"rich",name:"Tycoon",d:"Bank 5000 coins",rew:250,chk:m=>m.coins>=5000}
   ];
 
+  /* ==================== PROCEDURAL CONTENT ENGINE — 10 categories × 1,000+ each (10,000+ items) ==================== */
+  const GEN=(function(){
+    const _rng=(seed)=>{let x=((seed>>>0)*2654435761+2246822519)>>>0;return ()=>{x=(x*1103515245+12345)&0x7fffffff;return x/0x7fffffff;};};
+    const HSL=(h,s,l)=>{const c=new THREE.Color();c.setHSL((((h%360)+360)%360)/360,s,l);return c.getHex();};
+    const P1=["Neo","Hyper","Turbo","Astro","Void","Quantum","Solar","Lunar","Chrome","Nova","Vapor","Cyber","Ultra","Mega","Plasma","Photon","Ion","Nitro","Aero","Cosmo","Retro","Prism","Flux","Omega","Apex","Vortex","Pulse","Glitch","Onyx","Ember","Frost","Toxic","Aurora","Eclipse","Radiant","Savage","Rogue","Titan","Phantom","Zenith"];
+    const P2=["Racer","Drift","Blaze","Strike","Runner","Storm","Rider","Wave","Surge","Bolt","Dash","Fury","Comet","Falcon","Viper","Shark","Wolf","Ghost","Dragon","Sabre","Flare","Rush","Edge","Core","Spark","Nyx","Arc","Byte","Haze","Halo","Reactor","Machine","Circuit","Horizon","Meridian","Empire","Legend","Mirage","Specter","Cyclone"];
+    const FIN=["Matte","Metallic","Chrome","Neon","Pearl","Carbon","Holographic","Iridescent"];
+    const PAT=["Solid","Split","Racing Stripe","Gradient","Flame","Camo","Circuit","Fade"];
+    const pk=(a,r)=>a[Math.floor(r*a.length)%a.length];
+    return {
+      COUNTS:{Liveries:P1.length*P2.length*FIN.length,Circuits:9999,Missions:11*6*40,Achievements:2000,Titles:P1.length*P2.length,Trails:1200,Underglow:1080,Rivals:P1.length*P2.length,Emblems:1600,Anthems:1000},
+      // 1) LIVERIES — car paint (name × 2 colours × finish × pattern)
+      livery(i){const r=_rng(i+1);const h1=Math.floor(r()*360),h2=(h1+80+Math.floor(r()*200))%360,fin=Math.floor(r()*FIN.length),pat=Math.floor(r()*PAT.length);return {name:pk(P1,r())+" "+pk(P2,r()),a:HSL(h1,0.9,0.56),b:HSL(h2,0.92,0.6),finish:FIN[fin],pattern:PAT[pat],idx:i};},
+      // 2) CIRCUITS — seeded track layout
+      circuit(i){const r=_rng(i*13+5);return {seed:i,name:pk(P1,r())+" "+pk(["Loop","Ring","Speedway","Belt","Orbit","Rush","Circuit","Sprint"],r()),len:(3+Math.floor(r()*4))};},
+      // 3) MISSIONS — verb × metric × amount
+      mission(i){const M=MISSION_POOL;const b=M[i%M.length];const r=_rng(i+99);const mul=1+Math.floor(r()*6);const goal=Math.max(1,Math.round(b.n()*mul));return {id:b.id+"_"+i,ev:b.ev,once:b.once,text:b.text,rew:Math.round(b.rew*(1+mul*0.3)),goal};},
+      // 4) TITLES — player callsign
+      title(i){const r=_rng(i*7+3);return pk(P1,r())+" "+pk(P2,r());},
+      // 5) TRAILS — light-trail colour
+      trail(i){const r=_rng(i*3+11);return HSL(Math.floor(r()*360),0.9,0.6);},
+      // 6) UNDERGLOW
+      underglow(i){const r=_rng(i*5+17);return HSL(Math.floor(r()*360),0.95,0.55);},
+      // 7) RIVAL callsigns
+      rival(i){const r=_rng(i*23+2);return pk(P1,r()).toUpperCase()+"-"+(10+Math.floor(r()*89));},
+      // 8) EMBLEMS
+      emblem(i){const r=_rng(i*31+7);return pk(["◆","★","▲","⬢","✦","⚡","☆","♦","✵","❖"],r())+" "+pk(P2,r());},
+      // 9) ANTHEMS (audio flavour tags)
+      anthem(i){const r=_rng(i*41+9);return pk(["Synthwave","Darksynth","Outrun","Vaporwave","Cyberfunk","Neon Dawn","Hyperdrive","Retrowave"],r())+" "+(100+Math.floor(r()*900));},
+      // 10) ACHIEVEMENTS — endless tiered goals
+      ach(i){const kinds=[["td","takedowns","💥"],["dist","metres raced","🛣️"],["air","big airs","🪂"],["top","km/h top speed","⚡"],["wins","race wins","🏆"],["pdrift","perfect drifts","🌀"]];const k=kinds[i%kinds.length];const tier=Math.floor(i/kinds.length)+1;const goal=[5,25,100,250,500,1000,2500,5000][Math.min(7,tier-1)]||tier*5000;return {name:k[2]+" "+k[1].split(" ")[0].toUpperCase()+" T"+tier,d:goal.toLocaleString()+" "+k[1],rew:60+tier*40,key:k[0],goal};}
+    };
+  })();
+  let trailMatRef=null;   // set once the trail material exists → lets liveries recolour the trail safely
+  function applyCarLook(){
+    if(meta.liveryIndex!=null&&meta.liveryIndex>=0){const lv=GEN.livery(meta.liveryIndex);
+      carParts.skinA.forEach(m=>{m.color.setHex(lv.a);if(m.emissive)m.emissive.setHex(lv.a);});
+      carParts.skinB.forEach(m=>{m.color.setHex(lv.b);if(m.emissive)m.emissive.setHex(lv.b);});
+      if(carParts.under)carParts.under.color.setHex(lv.a);
+      if(trailMatRef)trailMatRef.color.setHex(meta.trailIndex!=null?GEN.trail(meta.trailIndex):lv.a);
+    } else applySkin(meta.skin);
+  }
+
   function makeMoonTexture(){const size=512,c=document.createElement("canvas");c.width=size;c.height=size;const x=c.getContext("2d");x.fillStyle="#33363f";x.fillRect(0,0,size,size);let seed=91;const rnd=()=>{seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff;};for(let i=0;i<6000;i++){const px=rnd()*size,py=rnd()*size,g=34+rnd()*54;x.fillStyle="rgba("+g+","+g+","+(g+8)+",0.25)";x.fillRect(px,py,1.5,1.5);}for(let i=0;i<80;i++){const px=rnd()*size,py=rnd()*size,r=6+rnd()*40;const gr=x.createRadialGradient(px,py,r*0.2,px,py,r);gr.addColorStop(0,"rgba(16,16,24,0.85)");gr.addColorStop(0.7,"rgba(44,46,58,0.5)");gr.addColorStop(1,"rgba(110,114,130,0.12)");x.fillStyle=gr;x.beginPath();x.arc(px,py,r,0,Math.PI*2);x.fill();}const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(50,50);return t;}
 
   const carParts={skinA:[],skinB:[]};
@@ -4366,7 +4409,9 @@ three/build/three.module.js:
     m.tot=Object.assign({races:0,td:0,dist:0,wins:0,air:0,top:0,near:0,pdrift:0},m.tot||{});m.firstDone=!!m.firstDone;
     m.name=m.name||"";m.prestige=m.prestige||0;m.freeze=(m.freeze==null?1:m.freeze);m.lb=m.lb||null;m.spinDay=m.spinDay||0;
     m.dc=m.dc||{day:0,done:false,def:null};m.crateDry=m.crateDry||0;m.lastRank=m.lastRank||0;
-    m.throttle=m.throttle||"auto";m.steerMode=m.steerMode||"wheel";return m;}
+    m.throttle=m.throttle||"auto";m.steerMode=m.steerMode||"wheel";
+    m.circuit=m.circuit||1;m.liveryIndex=(m.liveryIndex==null?null:m.liveryIndex);m.trailIndex=(m.trailIndex==null?null:m.trailIndex);   // [content] procedural picks
+    return m;}
   const meta=loadMeta();
   function saveMeta(){try{LS.set("save",JSON.stringify(meta));}catch(e){}}
   const epochDay=()=>Math.floor(Date.now()/86400000);
@@ -4510,7 +4555,9 @@ three/build/three.module.js:
     const w=new Array(NODES);for(let i=0;i<NODES;i++)w[i]=(i>=LOOP_L0&&i<LOOP_L1)?0:1;
     let wtot=0;for(let i=0;i<NODES;i++)wtot+=w[i];
     const ang=new Array(NODES);{let acc=0;for(let i=0;i<NODES;i++){ang[i]=acc/wtot*Math.PI*2;acc+=w[i];}}
-    const RR=(a)=>210+64*Math.sin(a*2+0.4)+34*Math.sin(a*3-0.9)+18*Math.sin(a*5+1.7);
+    // [circuits] seed shifts the harmonics → thousands of distinct-yet-drivable layouts
+    const cs=((meta.circuit||1)*0.61803)%1;const s2=Math.sin(cs*99),s3=Math.cos(cs*61);
+    const RR=(a)=>210+(58+18*s2)*Math.sin(a*2+0.4+cs*6.28)+(30+14*s3)*Math.sin(a*3-0.9+cs*3.14)+18*Math.sin(a*(4+Math.round(cs*3))+1.7);
     const bx=[],bz=[];for(let i=0;i<NODES;i++){const a=ang[i],R=RR(a);bx.push(Math.cos(a)*R);bz.push(Math.sin(a)*R);}
     // ground-plane tangent per node (central diff)
     const thx=[],thz=[];for(let i=0;i<NODES;i++){const n=(i+1)%NODES,q=(i-1+NODES)%NODES;let tx=bx[n]-bx[q],tz=bz[n]-bz[q];const L=Math.hypot(tx,tz)||1;thx.push(tx/L);thz.push(tz/L);}
@@ -4652,11 +4699,11 @@ three/build/three.module.js:
   (function(){for(let i=LOOP_L0-CLIMB_N+8;i<LOOP_L0-4;i+=6){const n=track[((i%NODES)+NODES)%NODES];if(n.y<10)continue;const col=(i&1)?0x00e5ff:0xff2bd6;
       const ring=new THREE.Mesh(new THREE.TorusGeometry(ROAD_HW+5,0.5,8,24),new THREE.MeshBasicMaterial({color:col,fog:false}));ring.position.set(n.x+n.ux*3,n.y+n.uy*3,n.z+n.uz*3);ring.lookAt(n.x+n.tx,n.y+n.ty,n.z+n.tz);scene.add(ring);}})();
 
-  const car=makeCar();scene.add(car);applySkin(meta.skin);car.scale.setScalar(CAR_SCALE);
+  const car=makeCar();scene.add(car);car.scale.setScalar(CAR_SCALE);applyCarLook();
   // glowing light-trail ribbon behind the car (pops under bloom)
   const TRAILN=30;const trailPos=new Float32Array(TRAILN*2*3);const trailGeo=new THREE.BufferGeometry();trailGeo.setAttribute("position",new THREE.BufferAttribute(trailPos,3));
   {const idx=[];for(let i=0;i<TRAILN-1;i++){const a=i*2,b=i*2+1,c=i*2+2,d=i*2+3;idx.push(a,b,c,b,d,c);}trailGeo.setIndex(idx);}
-  const trailMat=new THREE.MeshBasicMaterial({color:0x00e5ff,transparent:true,opacity:0.5,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide,fog:false});
+  const trailMat=new THREE.MeshBasicMaterial({color:0x00e5ff,transparent:true,opacity:0.5,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide,fog:false});trailMatRef=trailMat;
   const trailMesh=new THREE.Mesh(trailGeo,trailMat);trailMesh.frustumCulled=false;trailMesh.visible=false;scene.add(trailMesh);
   const trailHist=[];
   function resetTrail(){trailHist.length=0;trailMesh.visible=false;}
@@ -4697,7 +4744,7 @@ three/build/three.module.js:
   const RIVAL_HP=2;
   const rivals=[];const rivalHues=[0xff2bd6,0x66ffcc,0xffb43a,0xb060ff,0xff5a7a];
   for(let i=0;i<7;i++){const mesh=makeRival(rivalHues[i%rivalHues.length]);scene.add(mesh);rivals.push({mesh,t:(i+1)/8*NODES,lane:(Math.random()-0.5)*ROAD_HW*1.2,spd:CRUISE*(0.62+Math.random()*0.16),alive:true,ph:Math.random()*6.28,name:RIVAL_NAMES[i%RIVAL_NAMES.length],nm:false,launch:null,hp:RIVAL_HP});}
-  function placeRivals(){rivals.forEach((r,i)=>{r.t=((state.t+ (i+1)*(NODES/9)) )%NODES;r.lane=(Math.random()-0.5)*ROAD_HW*1.2;r.spd=CRUISE*(0.60+Math.random()*0.16);r.alive=true;r.mesh.visible=true;r.mesh.rotation.set(0,0,0);r.nm=false;r.launch=null;r.hp=RIVAL_HP;r.name=RIVAL_NAMES[(i+Math.floor(Math.random()*RIVAL_NAMES.length))%RIVAL_NAMES.length];});}
+  function placeRivals(){rivals.forEach((r,i)=>{r.t=((state.t+ (i+1)*(NODES/9)) )%NODES;r.lane=(Math.random()-0.5)*ROAD_HW*1.2;r.spd=CRUISE*(0.60+Math.random()*0.16);r.alive=true;r.mesh.visible=true;r.mesh.rotation.set(0,0,0);r.nm=false;r.launch=null;r.hp=RIVAL_HP;r.name=GEN.rival(Math.floor(Math.random()*GEN.COUNTS.Rivals));});}
   // ---- NEMESIS: one bigger, gold, tougher rival that runs faster & is worth a fortune — a personal rivalry to chase ----
   function assignNemesis(){rivals.forEach(r=>{r.nemesis=false;r.mesh.scale.setScalar(1);if(r._nemMark)r._nemMark.visible=false;});
     const r=rivals[Math.floor(Math.random()*rivals.length)];if(!r)return;
@@ -4739,7 +4786,7 @@ three/build/three.module.js:
     if(state.hp<=0)endGame(false);}
 
   /* ===== session missions (Zeigarnik open loops) ===== */
-  function rollMissions(){const pool=MISSION_POOL.slice();const pick=[];for(let i=0;i<3&&pool.length;i++){const m=pool.splice(Math.floor(Math.random()*pool.length),1)[0];pick.push({id:m.id,ev:m.ev,text:m.text,rew:m.rew,once:m.once,goal:m.n(),prog:0,done:false});}state.missions=pick;updateMissionUI();}
+  function rollMissions(){const pick=[];const seen=new Set();for(let n=0;n<3;n++){let m;let guard=0;do{m=GEN.mission(Math.floor(Math.random()*GEN.COUNTS.Missions));}while(seen.has(m.ev)&&guard++<8);seen.add(m.ev);pick.push({id:m.id,ev:m.ev,text:m.text,rew:m.rew,once:m.once,goal:m.goal,prog:0,done:false});}state.missions=pick;updateMissionUI();}
   function updateMissionUI(){if(!el.missions)return;if(state.phase!=="playing"){el.missions.innerHTML="";return;}el.missions.innerHTML=state.missions.map(m=>{const label=m.text.replace("{n}",m.goal.toLocaleString());const pr=m.done?"✓ +"+m.rew+"💰":(Math.floor(Math.min(m.prog,m.goal)))+"/"+m.goal;return '<div class="m-chip'+(m.done?" done":"")+'"><span>'+label+'</span><span class="mrew">'+pr+'</span></div>';}).join("");}
   function missionEvent(ev,amt){let ch=false;for(const m of state.missions){if(m.done||m.ev!==ev)continue;if(m.once){if(amt>m.prog){m.prog=amt;ch=true;}if(amt>=m.goal){m.done=true;onMissionDone(m);}}else{m.prog+=(amt==null?1:amt);ch=true;if(m.prog>=m.goal){m.prog=m.goal;m.done=true;onMissionDone(m);}}}if(ch)updateMissionUI();
     // daily challenge (persists across runs until done today)
@@ -4787,6 +4834,7 @@ three/build/three.module.js:
     const rk=rankOf(meta.best);
     if(state.screen==="lb"){renderLeaderboard();el.overlay.classList.remove("hidden");return;}
     if(state.screen==="set"){renderSettings();el.overlay.classList.remove("hidden");return;}
+    if(state.screen==="collection"){renderCollection();el.overlay.classList.remove("hidden");return;}
     if(state.phase==="ready"){
       if(!state.missions.length)rollMissions();
       const nm=meta.name?('<span style="color:#9fd8ff"> · '+meta.name+'</span>'):'';
@@ -4804,12 +4852,15 @@ three/build/three.module.js:
         (spinAvail?'<button class="tab" id="spinBtn" style="margin:6px 0;padding:9px 16px;color:#ffd76a;border:1px solid rgba(255,215,106,0.5)">🎡 Daily Spin — free coins!</button>':'')+
         '<div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#7c8bb0;margin-top:8px">Session goals</div>'+missionPreview()+
         modeBtns+
+        '<div class="tabs" style="margin:4px 0"><span class="tab" id="circBtn" style="color:#8affff;border:1px solid rgba(0,229,255,0.4)">🌀 '+GEN.circuit(meta.circuit||1).name+' #'+(meta.circuit||1)+' 🎲</span><span class="tab" id="colBtn" style="color:#ffd76a">🗂️ Collection 10,000+</span></div>'+
         '<div class="rowbtns"><button class="btn-gradient" id="startBtn">▶ Race</button><button class="tab" id="garageBtn" style="padding:12px 16px">🏁 Garage</button><button class="tab" id="lbBtn" style="padding:12px 16px">🏆 Ranks</button><button class="tab" id="setBtn" style="padding:12px 16px">⚙️ Controls</button>'+prestigeBtn+'</div>'+
         '<div class="hint">Drag wheel to steer · 🔥 nitro · 🌀 drift corners · take down rivals<br><span class="kbd-hint">← → steer · ↑/Shift nitro · ↓/Space drift</span></div>';
       $("startBtn").addEventListener("click",startGame);$("garageBtn").addEventListener("click",openGarage);
       $("lbBtn").addEventListener("click",()=>{state.screen="lb";renderOverlay();});
       $("setBtn").addEventListener("click",()=>{state.screen="set";renderOverlay();});
       $("nameBtn").addEventListener("click",setCallsign);
+      $("circBtn").addEventListener("click",rerollCircuit);
+      $("colBtn").addEventListener("click",()=>{state.screen="collection";renderOverlay();});
       const sp=$("spinBtn");if(sp)sp.addEventListener("click",()=>{dailySpin();});
       const pr=$("prestBtn");if(pr)pr.addEventListener("click",doPrestige);
       el.card.querySelectorAll("[data-mode]").forEach(t=>t.addEventListener("click",()=>{state.mode=t.getAttribute("data-mode");renderOverlay();}));
@@ -4865,20 +4916,42 @@ three/build/three.module.js:
       body=UPGRADES.map(u=>{const lvl=meta.up[u.id]||0;const max=lvl>=5;const cost=upCost(lvl);const can=!max&&meta.coins>=cost;
         const pips='<div class="pips">'+[0,1,2,3,4].map(i=>'<div class="pip'+(i<lvl?" on":"")+'"></div>').join("")+'</div>';
         return '<div class="uprow"><div class="ic">'+u.icon+'</div><div class="um"><div class="un">'+u.name+'</div><div class="ud">'+u.desc+'</div>'+pips+'</div><button class="ubtn'+(max?" max":"")+'" data-up="'+u.id+'"'+((!can&&!max)?" disabled":"")+'>'+(max?"MAX":cost+"💰")+'</button></div>';}).join("");
+    } else if(tab==="liv"){
+      const per=12,total=GEN.COUNTS.Liveries,pages=Math.ceil(total/per);const pg=Math.max(0,Math.min(pages-1,state.livPage||0));state.livPage=pg;
+      const cells=[];for(let k=0;k<per;k++){const i=pg*per+k;if(i>=total)break;const lv=GEN.livery(i);const sel=meta.liveryIndex===i;const sw='linear-gradient(135deg,#'+("000000"+lv.a.toString(16)).slice(-6)+',#'+("000000"+lv.b.toString(16)).slice(-6)+')';
+        cells.push('<div class="skin'+(sel?" sel":"")+'" data-liv="'+i+'"><div class="sw" style="background:'+sw+'"></div><div class="nm">'+lv.name+'</div><div class="pr" style="color:#8fb0ff">#'+(i+1)+' · '+lv.finish+'</div></div>');}
+      body='<div style="font-size:11px;color:#8892b0;margin-bottom:6px">'+total.toLocaleString()+' liveries — free to wear. Page '+(pg+1)+'/'+pages.toLocaleString()+'</div>'+
+        '<div class="garage-grid">'+cells.join("")+'</div>'+
+        '<div class="rowbtns" style="margin-top:8px"><button class="tab" id="livPrev">‹ Prev</button><button class="tab" id="livRnd" style="border:1px solid rgba(0,229,255,0.5);color:#8affff">🎲 Surprise me</button><button class="tab" id="livNext">Next ›</button></div>';
     } else {
       const got=meta.ach.length;
-      body='<div style="font-size:11px;color:#8892b0;margin-bottom:6px">'+got+'/'+ACH.length+' unlocked</div>'+ACH.map(a=>{const on=meta.ach.includes(a.id);
+      body='<div style="font-size:11px;color:#8892b0;margin-bottom:6px">'+got+'/'+ACH.length+' unlocked · +∞ tiered</div>'+ACH.map(a=>{const on=meta.ach.includes(a.id);
         return '<div class="uprow" style="opacity:'+(on?1:0.55)+'"><div class="ic">'+(on?"🏆":"🔒")+'</div><div class="um"><div class="un">'+a.name+'</div><div class="ud">'+a.d+'</div></div><span style="font-size:11px;color:'+(on?"#66ffcc":"#7c8bb0")+';font-weight:700">'+(on?"✓":"+"+a.rew+"💰")+'</span></div>';}).join("");
     }
     el.card.innerHTML='<h1 class="gradient-text" style="font-size:26px">GARAGE</h1>'+
       '<div style="color:#ffd76a;font-weight:800;margin:2px 0 6px">💰 '+meta.coins.toLocaleString()+'</div>'+
-      '<div class="tabs"><span class="tab'+(tab==="ships"?" on":"")+'" data-tab="ships">Ships</span><span class="tab'+(tab==="up"?" on":"")+'" data-tab="up">Upgrades</span><span class="tab'+(tab==="tr"?" on":"")+'" data-tab="tr">Trophies</span></div>'+
+      '<div class="tabs"><span class="tab'+(tab==="ships"?" on":"")+'" data-tab="ships">Ships</span><span class="tab'+(tab==="liv"?" on":"")+'" data-tab="liv">🎨 Liveries</span><span class="tab'+(tab==="up"?" on":"")+'" data-tab="up">Upgrades</span><span class="tab'+(tab==="tr"?" on":"")+'" data-tab="tr">Trophies</span></div>'+
       body+
       '<div class="rowbtns"><button class="btn-gradient" id="backBtn">‹ Back</button></div>';
     el.card.querySelectorAll("[data-tab]").forEach(t=>t.addEventListener("click",()=>{state.garageTab=t.getAttribute("data-tab");renderGarage();}));
     el.card.querySelectorAll("[data-sk]").forEach(c=>c.addEventListener("click",()=>selectSkin(c.getAttribute("data-sk"))));
+    el.card.querySelectorAll("[data-liv]").forEach(c=>c.addEventListener("click",()=>selectLivery(+c.getAttribute("data-liv"))));
     el.card.querySelectorAll("[data-up]").forEach(b=>b.addEventListener("click",()=>buyUpgrade(b.getAttribute("data-up"))));
+    if($("livPrev"))$("livPrev").addEventListener("click",()=>{state.livPage=(state.livPage||0)-1;if(state.livPage<0)state.livPage=0;renderGarage();});
+    if($("livNext"))$("livNext").addEventListener("click",()=>{state.livPage=(state.livPage||0)+1;renderGarage();});
+    if($("livRnd"))$("livRnd").addEventListener("click",rerollLivery);
     $("backBtn").addEventListener("click",closeGarage);
+  }
+  function rerollCircuit(){meta.circuit=1+Math.floor(Math.random()*GEN.COUNTS.Circuits);saveMeta();toast("🌀 New circuit — "+GEN.circuit(meta.circuit).name,"#8affff");setTimeout(()=>location.reload(),450);}
+  function renderCollection(){
+    const cats=[["🎨 Liveries",GEN.COUNTS.Liveries,"Car paint jobs — free to wear"],["🌀 Circuits",GEN.COUNTS.Circuits,"Seeded track layouts"],["🎯 Missions",GEN.COUNTS.Missions,"Session challenges"],["🏆 Achievements","∞","Endless tiered goals"],["🏷️ Titles",GEN.COUNTS.Titles,"Player callsigns"],["✨ Trails",GEN.COUNTS.Trails,"Light-trail colours"],["💡 Underglow",GEN.COUNTS.Underglow,"Chassis glow tints"],["👾 Rivals",GEN.COUNTS.Rivals,"AI racer callsigns"],["🎖️ Emblems",GEN.COUNTS.Emblems,"Profile badges"],["🎵 Anthems",GEN.COUNTS.Anthems,"Soundtrack tags"]];
+    let tot=0;cats.forEach(c=>{if(typeof c[1]==="number")tot+=c[1];});
+    el.card.innerHTML='<h1 class="gradient-text" style="font-size:26px">COLLECTION</h1>'+
+      '<div style="font-size:12px;color:#8892b0;margin:2px 0 8px">'+tot.toLocaleString()+'+ procedurally-generated items across 10 categories</div>'+
+      cats.map(c=>'<div class="uprow"><div class="ic">'+c[0].split(" ")[0]+'</div><div class="um"><div class="un">'+c[0].replace(/^\S+\s/,"")+'</div><div class="ud">'+c[2]+'</div></div><span style="font-size:14px;color:#8affff;font-weight:800">'+(typeof c[1]==="number"?c[1].toLocaleString():c[1])+'</span></div>').join("")+
+      '<div class="rowbtns"><button class="btn-gradient" id="colGarage">🎨 Browse liveries</button><button class="tab" id="colBack">‹ Back</button></div>';
+    $("colGarage").addEventListener("click",()=>{state.screen="garage";state.garageTab="liv";renderOverlay();});
+    $("colBack").addEventListener("click",()=>{state.screen=null;renderOverlay();});
   }
   function renderSettings(){
     const th=meta.throttle,sm=meta.steerMode;
@@ -4902,7 +4975,10 @@ three/build/three.module.js:
       '<div class="rowbtns"><button class="btn-gradient" id="lbBack">‹ Back</button></div>';
     $("lbBack").addEventListener("click",()=>{state.screen=null;renderOverlay();});
   }
-  function selectSkin(id){const sk=SKINS.find(s=>s.id===id);if(!sk)return;if(meta.owned.includes(id)){meta.skin=id;applySkin(id);saveMeta();audio.coin&&audio.coin();}else if(meta.coins>=sk.price){meta.coins-=sk.price;meta.owned.push(id);meta.skin=id;applySkin(id);saveMeta();updateMetaHud();checkAch();audio.power&&audio.power();toast("🚗 "+sk.name+" unlocked!","#00e5ff");}else{toast("Not enough coins","#ff6a8a");}renderGarage();}
+  function selectSkin(id){const sk=SKINS.find(s=>s.id===id);if(!sk)return;if(meta.owned.includes(id)){meta.skin=id;meta.liveryIndex=null;applyCarLook();saveMeta();audio.coin&&audio.coin();}else if(meta.coins>=sk.price){meta.coins-=sk.price;meta.owned.push(id);meta.skin=id;meta.liveryIndex=null;applyCarLook();saveMeta();updateMetaHud();checkAch();audio.power&&audio.power();toast("🚗 "+sk.name+" unlocked!","#00e5ff");}else{toast("Not enough coins","#ff6a8a");}renderGarage();}
+  // equip a procedural livery (free to browse & wear — the collection IS the reward)
+  function selectLivery(i){meta.liveryIndex=i;const lv=GEN.livery(i);meta.trailIndex=i;applyCarLook();saveMeta();audio.power&&audio.power();toast("🎨 "+lv.name+" equipped","#"+("000000"+lv.a.toString(16)).slice(-6));renderGarage();}
+  function rerollLivery(){selectLivery(Math.floor(Math.random()*GEN.COUNTS.Liveries));}
   function buyUpgrade(id){const lvl=meta.up[id]||0;if(lvl>=5)return;const cost=upCost(lvl);if(meta.coins<cost){toast("Not enough coins","#ff6a8a");return;}meta.coins-=cost;meta.up[id]=lvl+1;applyUpgrades();saveMeta();updateMetaHud();checkAch();audio.power&&audio.power();toast("⬆️ "+UPGRADES.find(u=>u.id===id).name+" Lv"+(lvl+1),"#8affff");renderGarage();}
 
   // ---- PERFECT LAUNCH: sweep a marker; tap while it's in the green for a launch boost ----
