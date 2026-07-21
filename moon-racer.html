@@ -45,6 +45,28 @@
   .spfill { height:100%; width:0%; background:linear-gradient(90deg,#00e5ff,#8b5cf6,#ff2bd6); transition:width .08s linear; }
   .nlabel { font-size:9px; letter-spacing:.14em; text-transform:uppercase; color:#8affff; margin-top:6px; }
   .nfill { height:100%; width:0%; background:linear-gradient(90deg,#00e5ff,#a0f6ff); }
+  .rlfill { height:100%; width:0%; background:linear-gradient(90deg,#ff6a4d,#ffd76a); }
+  /* HEAT multiplier — the star readout; scales & glows as it climbs */
+  .heatbig { position:absolute; top:calc(env(safe-area-inset-top) + 92px); left:16px; display:flex; flex-direction:column; align-items:flex-start; pointer-events:none; transform-origin:left center; transition:transform .12s ease; text-shadow:0 0 18px rgba(255,120,60,0.9); }
+  .heatbig .hx { font-size:34px; font-weight:900; font-variant-numeric:tabular-nums; letter-spacing:.01em; line-height:1; background:linear-gradient(180deg,#ffe08a,#ff5a3c); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .heatbig .hl { font-size:10px; font-weight:800; letter-spacing:.22em; color:#ff8a5a; margin-top:2px; }
+  .heatbig.hot { animation:heatpulse .5s ease infinite; }
+  @keyframes heatpulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.12)} }
+  /* speed / heat euphoria vignette — the world tunnels & glows red-hot when you're "in the zone" */
+  .heatvig { pointer-events:none; position:absolute; inset:0; opacity:0; transition:opacity .25s ease;
+    background:radial-gradient(ellipse at 50% 60%, transparent 40%, rgba(255,60,30,0.18) 100%),
+               radial-gradient(ellipse at 50% 120%, rgba(255,120,40,0.16), transparent 55%); }
+  .heatflash { pointer-events:none; position:absolute; inset:0; opacity:0; background:radial-gradient(ellipse at 50% 55%, rgba(255,200,120,0.5), transparent 60%); }
+  /* dim the session-mission chips during play so YOUR car & the action stay the focus */
+  body.playing .missions { opacity:0.42; transition:opacity .3s; }
+  body.playing .missions:hover { opacity:0.9; }
+  /* PERFECT LAUNCH timing bar (start-of-race ritual) */
+  .launchui { position:absolute; left:50%; top:38%; transform:translateX(-50%); display:none; flex-direction:column; align-items:center; gap:8px; pointer-events:none; z-index:6; }
+  .launchui.on { display:flex; }
+  .launchui .ltxt { font-size:14px; font-weight:800; letter-spacing:.14em; color:#8affff; text-shadow:0 0 12px rgba(0,229,255,0.7); }
+  .launchui .lbar { position:relative; width:min(64vw,340px); height:16px; border-radius:999px; background:rgba(10,14,26,0.7); border:1px solid rgba(255,255,255,0.14); overflow:hidden; }
+  .launchui .lzone { position:absolute; right:0; top:0; height:100%; width:22%; background:linear-gradient(90deg,rgba(80,240,120,0.2),rgba(80,255,120,0.75)); }
+  .launchui .lmark { position:absolute; top:-3px; left:0%; width:6px; height:22px; border-radius:3px; background:#fff; box-shadow:0 0 12px #fff; }
   .nfull .nfill { animation:nglow .5s ease-in-out infinite alternate; }
   .odfill { height:100%; width:0%; background:linear-gradient(90deg,#ffd76a,#ff2bd6); }
   .odfull .odfill { animation:nglow .4s ease-in-out infinite alternate; }
@@ -165,8 +187,10 @@
 <body>
 <div id="app">
   <div class="vignette"></div>
+  <div class="heatvig" id="heatVig"></div>
   <div class="speedblur" id="speedBlur"></div>
   <div class="boost-flash" id="boostFlash"></div>
+  <div class="heatflash" id="heatFlash"></div>
   <div class="hurt-flash" id="hurtFlash"></div>
 
   <div class="hud">
@@ -191,7 +215,10 @@
     <div class="bar"><div class="spfill" id="spFill"></div></div>
     <div class="nlabel">Nitro</div><div class="bar" id="nbar"><div class="nfill" id="nFill"></div></div>
     <div class="nlabel" style="color:#ffd76a">Overdrive</div><div class="bar" id="odbar"><div class="odfill" id="odFill"></div></div>
+    <div class="nlabel" style="color:#ff6a4d">Redline</div><div class="bar"><div class="rlfill" id="rlFill"></div></div>
   </div>
+  <div class="heatbig" id="heatBig"><span class="hx" id="heatBigV">×1.0</span><span class="hl">HEAT</span></div>
+  <div class="launchui" id="launchUI"><div class="ltxt" id="launchTxt">TAP AT GREEN FOR BOOST</div><div class="lbar"><div class="lzone"></div><div class="lmark" id="launchMark"></div></div></div>
 
   <div class="popups" id="popups"></div>
   <div class="toasts" id="toasts"></div>
@@ -4214,6 +4241,7 @@ three/build/three.module.js:
   const CAM_DIST=6.8, CAM_H=2.3, LOOK_AHEAD=16;   // close + low + narrow FOV → car reads big and sits low in frame
   const CAR_SCALE=1.32;                            // enlarge the car model so it dominates the lower frame
   const LAPS_TOTAL=3;
+  const HEAT_MAX=12;                        // top HEAT score-multiplier (risk → reward, wiped on crash)
   const SKINS=[
     {id:"aurora",name:"Aurora",price:0,a:0x00e5ff,b:0xff2bd6},
     {id:"ember",name:"Ember",price:400,a:0xff7a2f,b:0xffd23f},
@@ -4305,7 +4333,7 @@ three/build/three.module.js:
     }
     const under=new THREE.PointLight(0x00e5ff,6,18,2);under.position.set(0,0.5,0);car.add(under);carParts.under=under;
     // ---- always-on player marker: a bright glowing ring + halo disc hugging the ground so YOUR car is unmistakable ----
-    const halo=new THREE.Mesh(new THREE.TorusGeometry(1.75,0.18,10,32),new THREE.MeshBasicMaterial({color:0x00e5ff,transparent:true,opacity:0.95,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));
+    const halo=new THREE.Mesh(new THREE.TorusGeometry(2.05,0.22,10,32),new THREE.MeshBasicMaterial({color:0x00e5ff,transparent:true,opacity:0.95,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));
     halo.rotation.x=Math.PI/2;halo.position.y=0.1;car.add(halo);carParts.halo=halo;
     const disc=new THREE.Mesh(new THREE.CircleGeometry(2.0,32),new THREE.MeshBasicMaterial({color:0x00cfff,transparent:true,opacity:0.28,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));
     disc.rotation.x=-Math.PI/2;disc.position.y=0.06;car.add(disc);carParts.disc=disc;
@@ -4342,7 +4370,9 @@ three/build/three.module.js:
   const el={score:$("score"),best:$("best"),lap:$("lap"),pos:$("pos"),takedowns:$("takedowns"),soundBtn:$("soundBtn"),
     spVal:$("spVal"),spFill:$("spFill"),nFill:$("nFill"),nbar:$("nbar"),boostFlash:$("boostFlash"),hurtFlash:$("hurtFlash"),speedBlur:$("speedBlur"),
     popups:$("popups"),toasts:$("toasts"),overlay:$("overlay"),card:$("card"),wheel:$("wheel"),wheelKnob:$("wheelKnob"),nitroBtn:$("nitroBtn"),driftBtn:$("driftBtn"),fireBtn:$("fireBtn"),
-    gasBtn:$("gasBtn"),brakeBtn:$("brakeBtn"),odFill:$("odFill"),odbar:$("odbar"),draftInd:$("draftInd"),miniCv:$("miniCv")};
+    gasBtn:$("gasBtn"),brakeBtn:$("brakeBtn"),odFill:$("odFill"),odbar:$("odbar"),draftInd:$("draftInd"),miniCv:$("miniCv"),
+    rlFill:$("rlFill"),heatBig:$("heatBig"),heatBigV:$("heatBigV"),heatVig:$("heatVig"),heatFlash:$("heatFlash"),
+    launchUI:$("launchUI"),launchMark:$("launchMark"),launchTxt:$("launchTxt")};
   let tiltOn=false,tiltZero=null;
   function enableTilt(){if(tiltOn)return;const go=()=>{tiltOn=true;window.addEventListener("deviceorientation",(e)=>{if(meta.steerMode!=="tilt"||e.gamma==null)return;if(tiltZero==null)tiltZero=e.gamma;let g=(e.gamma-tiltZero);state.steer=Math.max(-1,Math.min(1,g/22));});};
     try{if(typeof DeviceOrientationEvent!=="undefined"&&DeviceOrientationEvent.requestPermission){DeviceOrientationEvent.requestPermission().then(r=>{if(r==="granted")go();}).catch(()=>{});}else go();}catch(e){}}
@@ -4378,7 +4408,8 @@ three/build/three.module.js:
     score:0,takedowns:0,hp:3,lap:1,carY:0,vy:0,air:0,shake:0,hurtT:0,invuln:0,boostVis:0,
     mult:1,chain:0,chainT:0,maxChain:0,driftTime:0,nitroTime:0,dist:0,topSpeed:0,missions:[],coinsRun:0,
     mode:"circuit",dcTask:null,driftHold:0,hitStop:0,crateReward:0,crateTier:"",gambled:false,hitThisRun:false,diff:1,screen:null,garageTab:"ships",firing:0,fireTimer:0,
-    gas:0,braking:0,od:0,odActive:0,draft:0,pw:{shield:0,x2:0,magnet:0},started:0,startBoost:0};
+    gas:0,braking:0,od:0,odActive:0,draft:0,pw:{shield:0,x2:0,magnet:0},started:0,startBoost:0,
+    heat:1,heatWarm:0,redline:0,slowmo:0,noHit:0,flawless:0,launchT:0,launchLocked:0,camSwing:0,steerVel:0};
   const audio=new CyberpunkAudio();
 
   /* ============================ RENDERER / SCENE ============================ */
@@ -4405,7 +4436,7 @@ three/build/three.module.js:
   function renderScene(){if(composer)composer.render();else renderer.render(scene,camera);}
 
   const moonTex=makeMoonTexture();
-  const ground=new THREE.Mesh(new THREE.CircleGeometry(600,64),new THREE.MeshStandardMaterial({map:moonTex,color:0x5f6474,roughness:1,metalness:0.05}));ground.rotation.x=-Math.PI/2;scene.add(ground);
+  const ground=new THREE.Mesh(new THREE.CircleGeometry(600,64),new THREE.MeshStandardMaterial({map:moonTex,color:0x4a4f5e,roughness:1,metalness:0.05}));ground.rotation.x=-Math.PI/2;ground.position.y=-0.8;scene.add(ground);  // just below the road so the road always sits clearly on top
   // sky
   (function(){const N=1200,pos=new Float32Array(N*3);let seed=7;const rnd=()=>{seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff;};for(let i=0;i<N;i++){const r=800+rnd()*1000,th=rnd()*Math.PI*2,ph=rnd()*Math.PI;pos[i*3]=r*Math.sin(ph)*Math.cos(th);pos[i*3+1]=Math.abs(r*Math.cos(ph))*0.7+50;pos[i*3+2]=r*Math.sin(ph)*Math.sin(th);}const gg=new THREE.BufferGeometry();gg.setAttribute("position",new THREE.BufferAttribute(pos,3));scene.add(new THREE.Points(gg,new THREE.PointsMaterial({color:0xcfe0ff,size:2.2,sizeAttenuation:false,transparent:true,opacity:0.9,fog:false})));})();
   const moonBody=new THREE.Mesh(new THREE.SphereGeometry(140,32,24),new THREE.MeshStandardMaterial({map:moonTex.clone(),color:0x8a8f9e,emissive:0x223,emissiveIntensity:0.3,roughness:1}));moonBody.position.set(-420,260,-720);scene.add(moonBody);
@@ -4434,7 +4465,8 @@ three/build/three.module.js:
     // ground-plane tangent per node (central diff)
     const thx=[],thz=[];for(let i=0;i<NODES;i++){const n=(i+1)%NODES,q=(i-1+NODES)%NODES;let tx=bx[n]-bx[q],tz=bz[n]-bz[q];const L=Math.hypot(tx,tz)||1;thx.push(tx/L);thz.push(tz/L);}
     const eTx=thx[LOOP_L0], eTz=thz[LOOP_L0];     // entry direction into the loop
-    const hills=(i)=>{const a=ang[i];return 7*Math.sin(a*3+0.5)+4*Math.sin(a*5-1.1);};
+    // hills are POSITIVE-ONLY (0.6..~8) so the road never dips below the moon floor and "sinks" into it
+    const hills=(i)=>{const a=ang[i];return 0.6+2.6*(Math.sin(a*3+0.5)+1)+1.3*(Math.sin(a*5-1.1)+1);};
     const plateau=(i)=>{if(i>=LOOP_L0&&i<=LOOP_L1)return 1; if(i<LOOP_L0)return smooth((i-(LOOP_L0-CLIMB_N))/CLIMB_N); return 1-smooth((i-LOOP_L1)/CLIMB_N);};
     const anchorY=LOOP_H+hills(LOOP_L0);
     LOOP={ax:bx[LOOP_L0],ay:anchorY,az:bz[LOOP_L0],tx:eTx,tz:eTz,nx:-eTz,nz:eTx};
@@ -4540,6 +4572,23 @@ three/build/three.module.js:
   const PW_TYPES=[{t:"shield",c:0x66ccff},{t:"x2",c:0x66ffcc},{t:"magnet",c:0xb060ff},{t:"repair",c:0x66ff88},{t:"od",c:0xffd76a}];
   const powerups=[];const pwGeo=new THREE.OctahedronGeometry(1.35,0);
   for(let k=0;k<10;k++){const idx=Math.floor((k+0.15)/10*NODES);if(ramps.includes(idx)||inLoopRange(idx))continue;const n=track[idx];const spec=PW_TYPES[k%PW_TYPES.length];const mat=new THREE.MeshStandardMaterial({color:spec.c,emissive:spec.c,emissiveIntensity:2.6,metalness:0.4,roughness:0.25});const grp=new THREE.Group();const gem=new THREE.Mesh(pwGeo,mat);grp.add(gem);const ring=new THREE.Mesh(new THREE.TorusGeometry(1.9,0.13,8,24),new THREE.MeshBasicMaterial({color:spec.c,fog:false}));ring.rotation.x=Math.PI/2;grp.add(ring);const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.18,6,6),new THREE.MeshBasicMaterial({color:spec.c,transparent:true,opacity:0.4,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));beam.position.y=2.6;grp.add(beam);grp.position.set(n.x,n.y+2.0,n.z);scene.add(grp);powerups.push({idx,type:spec.t,mesh:grp,gem,ring,used:0});}
+  // ---- MYSTERY CRATES: variable-ratio reward (slot machine on wheels) — the strongest dopamine loop ----
+  const crates=[];const crateGeo=new THREE.BoxGeometry(2.2,2.2,2.2);
+  for(let k=0;k<6;k++){const idx=Math.floor((k+0.5)/6*NODES);if(ramps.includes(idx)||inLoopRange(idx))continue;const n=track[idx];
+    const grp=new THREE.Group();
+    const box=new THREE.Mesh(crateGeo,new THREE.MeshStandardMaterial({color:0x2a1e46,emissive:0x7a3cff,emissiveIntensity:1.4,metalness:0.5,roughness:0.35}));grp.add(box);
+    const edge=new THREE.Mesh(new THREE.TorusGeometry(1.7,0.12,6,4),new THREE.MeshBasicMaterial({color:0xffd76a,fog:false}));edge.rotation.x=Math.PI/2;grp.add(edge);
+    const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.22,7,6),new THREE.MeshBasicMaterial({color:0xb388ff,transparent:true,opacity:0.45,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));beam.position.y=3;grp.add(beam);
+    grp.position.set(n.x,n.y+1.9,n.z);scene.add(grp);crates.push({idx,mesh:grp,box,used:0});}
+  const CRATE_REWARDS=[
+    {w:34,f:()=>{const c=Math.round((60+Math.random()*90)*COIN_MUL);addCoins(c);state.coinsRun+=c;return "+"+c+"💰";}},
+    {w:24,f:()=>{addNitro(1);return "⚡ FULL NITRO";}},
+    {w:16,f:()=>{state.pw.x2=10;return "✕2 SCORE 10s";}},
+    {w:12,f:()=>{state.pw.shield=1;return "🛡️ SHIELD";}},
+    {w:9, f:()=>{state.heat=Math.min(HEAT_MAX,state.heat+3);flashHeat();return "🔥 HEAT +3";}},
+    {w:5, f:()=>{state.od=1;return "★ OVERDRIVE READY";}}];
+  function openCrate(){let tot=0;for(const r of CRATE_REWARDS)tot+=r.w;let x=Math.random()*tot,pick=CRATE_REWARDS[0];for(const r of CRATE_REWARDS){x-=r.w;if(x<=0){pick=r;break;}}
+    const label=pick.f();addScore(120);shakeAdd(0.2);flashHeat();audio.power&&audio.power();popup("🎁 "+label,0xffd76a,car.position.x,3,car.position.z);toast("MYSTERY CRATE — "+label,"#ffd76a");}
   function applyPowerup(type){const s=state;if(type==="shield"){s.pw.shield=1;toast("🛡️ SHIELD","#66ccff");}
     else if(type==="x2"){s.pw.x2=8;toast("✕2 SCORE 8s","#66ffcc");}
     else if(type==="magnet"){s.pw.magnet=8;toast("🧲 MAGNET 8s","#b060ff");}
@@ -4599,6 +4648,12 @@ three/build/three.module.js:
   const rivals=[];const rivalHues=[0xff2bd6,0x66ffcc,0xffb43a,0xb060ff,0xff5a7a];
   for(let i=0;i<7;i++){const mesh=makeRival(rivalHues[i%rivalHues.length]);scene.add(mesh);rivals.push({mesh,t:(i+1)/8*NODES,lane:(Math.random()-0.5)*ROAD_HW*1.2,spd:CRUISE*(0.62+Math.random()*0.16),alive:true,ph:Math.random()*6.28,name:RIVAL_NAMES[i%RIVAL_NAMES.length],nm:false,launch:null,hp:RIVAL_HP});}
   function placeRivals(){rivals.forEach((r,i)=>{r.t=((state.t+ (i+1)*(NODES/9)) )%NODES;r.lane=(Math.random()-0.5)*ROAD_HW*1.2;r.spd=CRUISE*(0.60+Math.random()*0.16);r.alive=true;r.mesh.visible=true;r.mesh.rotation.set(0,0,0);r.nm=false;r.launch=null;r.hp=RIVAL_HP;r.name=RIVAL_NAMES[(i+Math.floor(Math.random()*RIVAL_NAMES.length))%RIVAL_NAMES.length];});}
+  // ---- NEMESIS: one bigger, gold, tougher rival that runs faster & is worth a fortune — a personal rivalry to chase ----
+  function assignNemesis(){rivals.forEach(r=>{r.nemesis=false;r.mesh.scale.setScalar(1);if(r._nemMark)r._nemMark.visible=false;});
+    const r=rivals[Math.floor(Math.random()*rivals.length)];if(!r)return;
+    r.nemesis=true;r.name="NEMESIS";r.hp=RIVAL_HP+2;r.mesh.scale.setScalar(1.3);
+    if(!r._nemMark){const m=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.16,8,6),new THREE.MeshBasicMaterial({color:0xffd76a,transparent:true,opacity:0.65,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));m.position.y=4;r.mesh.add(m);r._nemMark=m;}
+    r._nemMark.visible=true;}
 
   /* ===== player guns ===== */
   const bolts=[];const boltGeo=new THREE.CylinderGeometry(0.12,0.12,2.2,8);const boltMat=new THREE.MeshBasicMaterial({color:0xff5a7a,fog:false});
@@ -4610,7 +4665,8 @@ three/build/three.module.js:
   function popup(text,colorHex,wx,wy,wz){const v=new THREE.Vector3(wx,wy||2,wz).project(camera);if(v.z>1)return;const sx=(v.x*0.5+0.5)*app.clientWidth,sy=(-v.y*0.5+0.5)*app.clientHeight;const d=document.createElement("div");d.className="pop";d.textContent=text;d.style.left=sx+"px";d.style.top=sy+"px";d.style.color="#"+("000000"+(colorHex||0xffffff).toString(16)).slice(-6);d.style.fontSize="16px";el.popups.appendChild(d);setTimeout(()=>d.remove(),1000);}
   function toast(text,color){const d=document.createElement("div");d.className="toast glass";d.textContent=text;d.style.color=color||"#fff";el.toasts.appendChild(d);setTimeout(()=>d.remove(),1900);}
   function shakeAdd(a){state.shake=Math.min(0.8,state.shake+a);}
-  function addScore(n){n=Math.round(n*(state.odActive>0?2:1)*(state.pw&&state.pw.x2>0?2:1));state.score+=n;el.score.textContent=state.score.toLocaleString();if(state.score>meta.best)el.best.textContent=state.score.toLocaleString();}
+  function addScore(n){n=Math.round(n*(state.odActive>0?2:1)*(state.pw&&state.pw.x2>0?2:1)*Math.max(1,state.heat||1));state.score+=n;el.score.textContent=state.score.toLocaleString();if(state.score>meta.best)el.best.textContent=state.score.toLocaleString();}
+  let _heatFlashT=0;function flashHeat(){_heatFlashT=0.5;}
   function addNitro(n){state.nitro=Math.min(1,state.nitro+n);}
   function takedown(r,wx,wz){if(!r.alive)return;r.alive=false;
     const wy=(r.mesh.position.y||1);carExplode(wx,wy,wz,0x7dff4a);
@@ -4621,7 +4677,10 @@ three/build/three.module.js:
     if(r.name)popup("💥 "+r.name,0xffffff,wx,3.4,wz);state.hitStop=state.chain>=3?0.07:0.04;
     meta.tot.td++;missionEvent("td",1);checkAch();
     setTimeout(()=>{if(state.phase==="playing"){r.t=(state.t+NODES*0.5)%NODES;r.lane=(Math.random()-0.5)*ROAD_HW*1.2;r.alive=true;r.mesh.visible=true;r.nm=false;r.launch=null;r.hp=RIVAL_HP;}},3500);}
-  function hurt(){if(state.invuln>0||state.odActive>0)return;if(state.pw&&state.pw.shield>0){state.pw.shield=0;state.invuln=1.0;shakeAdd(0.3);toast("🛡️ Shield absorbed it!","#66ccff");return;}state.hp--;state.hitThisRun=true;state.invuln=1.3;state.hurtT=0.4;state.speed*=0.5;comboBreak();audio.crash();shakeAdd(0.5);if(state.hp<=0)endGame(false);}
+  function hurt(){if(state.invuln>0||state.odActive>0)return;if(state.pw&&state.pw.shield>0){state.pw.shield=0;state.invuln=1.0;shakeAdd(0.3);toast("🛡️ Shield absorbed it!","#66ccff");return;}state.hp--;state.hitThisRun=true;state.invuln=1.3;state.hurtT=0.4;state.speed*=0.5;comboBreak();audio.crash();shakeAdd(0.5);
+    if(state.heat>2.2)popup("HEAT LOST ×"+state.heat.toFixed(1),0xff4d6a,car.position.x,3,car.position.z);
+    state.heat=1;state.noHit=0;state._flaw=0;state.redline=0;                 // crash wipes your multiplier — the sting that makes you careful
+    if(state.hp<=0)endGame(false);}
 
   /* ===== session missions (Zeigarnik open loops) ===== */
   function rollMissions(){const pool=MISSION_POOL.slice();const pick=[];for(let i=0;i<3&&pool.length;i++){const m=pool.splice(Math.floor(Math.random()*pool.length),1)[0];pick.push({id:m.id,ev:m.ev,text:m.text,rew:m.rew,once:m.once,goal:m.n(),prog:0,done:false});}state.missions=pick;updateMissionUI();}
@@ -4634,11 +4693,14 @@ three/build/three.module.js:
 
   /* ===== takedown combo chain (escalating reward) ===== */
   function comboHit(){state.chain++;state.chainT=2.6;state.mult=Math.min(6,1+state.chain*0.5);if(state.chain>state.maxChain)state.maxChain=state.chain;if(state.chain>=2){el.combo.classList.add("on");el.combo.innerHTML='<div class="cx">x'+state.chain+'</div><div class="cl">Takedown Chain</div>';missionEvent("combo",state.chain);}}
+  const COMBO_NAMES=["","","NICE","SICK!","INSANE!!","GODLIKE!!!","UNREAL!!!!","LEGENDARY!!!!!"];
+  function comboEsc(big){const c=Math.min(COMBO_NAMES.length-1,state.chain);if(c>=2)toast((big?"☠ ":"")+"×"+state.chain+" "+COMBO_NAMES[c],big?"#ffd76a":"#ff8aff");_heatFlashT=0.35;}
   function comboBreak(){if(state.chain>=3)popup("CHAIN x"+state.chain+"!",0xff2bd6,car.position.x,3,car.position.z);state.chain=0;state.mult=1;if(el.combo)el.combo.classList.remove("on");}
 
   /* ============================ CONTROLS ============================ */
   const keys=new Set();
-  window.addEventListener("keydown",(e)=>{const k=e.key.toLowerCase();if(["arrowleft","arrowright","arrowup","arrowdown"," "].includes(k))e.preventDefault();keys.add(k);if(k===" "&&state.phase!=="playing")startGame();});
+  window.addEventListener("keydown",(e)=>{const k=e.key.toLowerCase();if(["arrowleft","arrowright","arrowup","arrowdown"," "].includes(k))e.preventDefault();keys.add(k);if(state.launchActive&&(k===" "||k==="arrowup"||k==="w"||k==="enter"))tryLaunch();else if(k===" "&&state.phase!=="playing")startGame();});
+  app.addEventListener("pointerdown",()=>{if(state.launchActive)tryLaunch();},{passive:true});
   window.addEventListener("keyup",(e)=>keys.delete(e.key.toLowerCase()));
   let wheelId=null,wheelCx=0;
   let wheelCy=0;
@@ -4710,7 +4772,8 @@ three/build/three.module.js:
         '<div class="earn"><span>💰 <b style="color:#ffd76a">+'+state.coinsRun+'</b>'+(state.dbl?' <span style="color:#66ffcc">(2x!)</span>':'')+'</span><span>✨ <b style="color:#c4b5fd">+'+state.xpGain+'</b> XP</span><span>🎯 <b>'+doneM+'/'+state.missions.length+'</b></span></div>'+
         (state.cleanBonus?'<div style="font-size:12px;color:#66ffcc;margin:-2px 0 4px">✨ Clean race bonus +'+state.cleanBonus+'💰</div>':'')+
         xpBar()+ crateHtml+
-        '<div class="rowbtns"><button class="btn-gradient" id="againBtn">▶ Race again</button><button class="tab" id="garageBtn" style="padding:12px 16px">🏁 Garage</button><button class="tab" id="lbBtn2" style="padding:12px 16px">🏆 Ranks</button></div>';
+        (function(){const b=meta.best;const ni=RANKS.findIndex(r=>r[0]>b);if(ni<0)return '';const need=RANKS[ni][0]-b;const prev=RANKS[ni-1]?RANKS[ni-1][0]:0;const pct=Math.round((b-prev)/(RANKS[ni][0]-prev)*100);return '<div style="font-size:11.5px;color:#ffb46a;margin:8px 0 2px">🔥 <b>'+need.toLocaleString()+'</b> pts to <b style="color:'+RANKS[ni][2]+'">'+RANKS[ni][1]+'</b> — so close!</div><div class="xpbar"><div style="height:100%;width:'+pct+'%;background:linear-gradient(90deg,#ff6a4d,#ffd76a);border-radius:999px"></div></div>';})()+
+        '<div class="rowbtns"><button class="btn-gradient" id="againBtn" style="font-size:18px;padding:14px 34px">▶ RETRY</button><button class="tab" id="garageBtn" style="padding:12px 16px">🏁 Garage</button><button class="tab" id="lbBtn2" style="padding:12px 16px">🏆 Ranks</button></div>';
       $("againBtn").addEventListener("click",startGame);$("garageBtn").addEventListener("click",openGarage);
       $("lbBtn2").addEventListener("click",()=>{state.screen="lb";renderOverlay();});
       const cb=$("crateBtn");if(cb)cb.addEventListener("click",openCrate);
@@ -4786,6 +4849,14 @@ three/build/three.module.js:
   function selectSkin(id){const sk=SKINS.find(s=>s.id===id);if(!sk)return;if(meta.owned.includes(id)){meta.skin=id;applySkin(id);saveMeta();audio.coin&&audio.coin();}else if(meta.coins>=sk.price){meta.coins-=sk.price;meta.owned.push(id);meta.skin=id;applySkin(id);saveMeta();updateMetaHud();checkAch();audio.power&&audio.power();toast("🚗 "+sk.name+" unlocked!","#00e5ff");}else{toast("Not enough coins","#ff6a8a");}renderGarage();}
   function buyUpgrade(id){const lvl=meta.up[id]||0;if(lvl>=5)return;const cost=upCost(lvl);if(meta.coins<cost){toast("Not enough coins","#ff6a8a");return;}meta.coins-=cost;meta.up[id]=lvl+1;applyUpgrades();saveMeta();updateMetaHud();checkAch();audio.power&&audio.power();toast("⬆️ "+UPGRADES.find(u=>u.id===id).name+" Lv"+(lvl+1),"#8affff");renderGarage();}
 
+  // ---- PERFECT LAUNCH: sweep a marker; tap while it's in the green for a launch boost ----
+  function showLaunch(){state.launchActive=1;state.launchT=0;state.launchLocked=0;el.launchTxt.textContent="TAP AT GREEN FOR BOOST";el.launchTxt.style.color="#8affff";el.launchMark.style.left="0%";el.launchUI.classList.add("on");}
+  function hideLaunch(){state.launchActive=0;el.launchUI.classList.remove("on");}
+  function tryLaunch(){if(!state.launchActive||state.launchLocked)return;state.launchLocked=1;const m=state.launchT;
+    if(m>=0.78&&m<=1.0){state.speed=Math.min(NITRO_SPD,state.speed+70);addNitro(0.5);state.heat=Math.min(HEAT_MAX,state.heat+1.5);state.boostVis=1;el.launchTxt.textContent="⚡ PERFECT LAUNCH!";el.launchTxt.style.color="#8dff9a";audio.nitro&&audio.nitro();shakeAdd(0.35);flashHeat();}
+    else if(m>=0.62){state.speed+=30;addNitro(0.2);el.launchTxt.textContent="GOOD START";el.launchTxt.style.color="#ffd76a";}
+    else{state.speed*=0.8;el.launchTxt.textContent="JUMP START…";el.launchTxt.style.color="#ff8a8a";}
+    setTimeout(hideLaunch,650);}
   function startGame(){
     if(!audio._playing){audio.start().catch(()=>{});}
     state.screen=null;applyUpgrades();
@@ -4795,13 +4866,17 @@ three/build/three.module.js:
     state.mult=1;state.chain=0;state.chainT=0;state.maxChain=0;state.driftTime=0;state.nitroTime=0;state.dist=0;state.topSpeed=0;state.coinsRun=0;state.newBest=false;state.crateOpened=false;
     state.driftHold=0;state.hitStop=0;state.hitThisRun=false;state.gambled=false;state.diff=1;state.firing=0;state.fireTimer=0;bolts.forEach(b=>{b.active=false;b.mesh.visible=false;});
     state.gas=0;state.braking=0;state.od=0;state.odActive=0;state.draft=0;state.pw={shield:0,x2:0,magnet:0};applyControlMode();powerups.forEach(p=>{p.used=0;p.mesh.visible=true;});
+    state.heat=1;state.redline=0;state.noHit=0;state._flaw=0;state.slowmo=0;state.camSwing=0;document.body.classList.add("playing");
+    crates.forEach(c=>{c.used=0;c.mesh.visible=true;});assignNemesis();
+    // ---- PERFECT LAUNCH: a quick rev-timing bar at the lights → nail it for a boost (a ritual every run) ----
+    state.launchT=1.4;state.launchLocked=0;showLaunch();
     state.dcTask=(meta.dc&&meta.dc.def&&!meta.dc.done)?{ev:meta.dc.def.ev,goal:meta.dc.def.n,once:meta.dc.def.once,rew:meta.dc.def.rew,prog:0,done:false}:null;
     el.score.textContent="0";el.takedowns.textContent="💥 0";el.lap.textContent=state.mode==="endless"?"∞":"1";el.pos.textContent="P1";
     car.visible=true;resetTrail();rollMissions();nitroPads.forEach(p=>p.used=0);coinPads.forEach(p=>{p.used=0;p.mesh.visible=true;});placeRivals();renderOverlay();
   }
   function endGame(won){
     if(state.phase!=="playing")return;
-    state.phase=won?"win":"over";comboBreak();state.hitStop=0;
+    state.phase=won?"win":"over";comboBreak();state.hitStop=0;document.body.classList.remove("playing");hideLaunch();
     if(won)missionEvent("win",1);
     if(won&&!state.hitThisRun){missionEvent("clean",1);state.cleanBonus=Math.round(400*COIN_MUL);}else state.cleanBonus=0;
     meta.tot.races++;if(won)meta.tot.wins++;meta.tot.dist+=Math.round(state.dist);meta.tot.top=Math.max(meta.tot.top,Math.round(state.topSpeed));
@@ -4840,6 +4915,11 @@ three/build/three.module.js:
       if(s.hitStop>0){s.hitStop-=dt;renderScene();return;}   // brief freeze-frame on big takedowns
       // ---- overdrive timer ----
       if(s.odActive>0){s.odActive-=dt;s.invuln=Math.max(s.invuln,0.1);if(s.odActive<=0){s.od=0;toast("Overdrive ended","#8892b0");}}
+      // ---- perfect-launch marker sweep ----
+      if(s.launchActive){s.launchT+=dt/1.4;el.launchMark.style.left=(Math.min(1,s.launchT)*100).toFixed(1)+"%";if(s.launchT>=1.08&&!s.launchLocked){s.launchLocked=1;el.launchTxt.textContent="TOO LATE";el.launchTxt.style.color="#ff8a8a";setTimeout(hideLaunch,500);}}
+      // ---- bullet-time: near-misses briefly slow the WORLD (not the UI) for a dopamine beat ----
+      if(s.slowmo>0)s.slowmo=Math.max(0,s.slowmo-dt);
+      const tScale=s.slowmo>0?0.34:1;                          // world time-scale
       // ---- throttle: auto-cruise or manual gas/brake; nitro & overdrive stack on top ----
       const manual=meta.throttle==="manual";
       const nitroKey=s.nitroOn||keys.has("shift")||(!manual&&(keys.has("arrowup")||keys.has("w")));
@@ -4863,19 +4943,31 @@ three/build/three.module.js:
       // ---- steering = lane change across the road; drift charges nitro ----
       let steer=s.steer;if(keys.has("arrowleft")||keys.has("a"))steer-=1;if(keys.has("arrowright")||keys.has("d"))steer+=1;steer=Math.max(-1,Math.min(1,steer));
       const drifting=(s.drift||keys.has("arrowdown")||keys.has("s")||keys.has(" "))&&Math.abs(steer)>0.15&&s.air<=0;
-      const laneSpd=drifting?TURN_LANE*1.5:TURN_LANE;
-      s.lane+=steer*laneSpd*dt;
+      const laneSpd=drifting?TURN_LANE*1.6:TURN_LANE*1.15;      // snappier lane response → feels connected
+      s.lane+=steer*laneSpd*dt*tScale;
+      s.camSwing+=(steer-s.camSwing)*Math.min(1,dt*7);          // smoothed steer for camera swing (driving feel)
       const edge=ROAD_HW-1.4;
       if(s.lane>edge){s.lane=edge;if(s.air<=0){s.speed*=0.9;}}
       if(s.lane<-edge){s.lane=-edge;if(s.air<=0){s.speed*=0.9;}}
-      // drift yaw (visual slide) + nitro charge + tyre smoke
-      const yawTarget=drifting?-steer*0.5:( -steer*0.12 );
-      s.driftYaw+=(yawTarget-s.driftYaw)*Math.min(1,dt*8);
+      // drift yaw (visual slide) — stronger so the nose visibly points where you steer
+      const yawTarget=drifting?-steer*0.55:( -steer*0.26 );
+      s.driftYaw+=(yawTarget-s.driftYaw)*Math.min(1,dt*9);
       if(drifting){s.driftHold+=dt;s.driftTime+=dt;missionEvent("drift",dt);addNitro(dt*0.24*NITRO_MUL);if(s.odActive<=0)s.od=Math.min(1,s.od+dt*0.05);if(Math.random()<0.6)puffSmoke(car.position.x-steer*0.6,0.3,car.position.z+1.6,0xbfc8dd);}
       else{if(s.driftHold>1.3){const b=Math.round(120*Math.min(3,s.driftHold));addScore(b);addNitro(0.16);popup("PERFECT DRIFT +"+b,0x8affff,car.position.x,2.4,car.position.z);meta.tot.pdrift++;missionEvent("pdrift",1);audio.power&&audio.power();}s.driftHold=0;}
 
+      // ---- HEAT: a rising score multiplier that rewards RISK and is WIPED by a crash (loss-aversion loop) ----
+      const spF=s.speed/NITRO_SPD;
+      const risky=(spF>0.52)||drifting||boosting||s.odActive>0||s.air>0||s.draft>0;
+      s.heat+=(risky?(0.5+spF*0.8+(boosting||drifting?0.6:0)):-1.1)*dt;   // climbs while you push, bleeds fast when you coast/brake
+      if(brakeOn)s.heat-=0.6*dt;
+      s.heat=Math.max(1,Math.min(HEAT_MAX,s.heat));
+      s.noHit+=dt;                                              // flawless timer (no-hit streak feeds heat)
+      if(s.noHit>6&&!s._flaw){s._flaw=1;s.heat=Math.min(HEAT_MAX,s.heat+0.8);addNitro(0.1);toast("✦ FLAWLESS RUN","#8affff");}
+      // ---- REDLINE: hold near top speed to fill a bar → euphoric payout ----
+      if(spF>0.9){s.redline=Math.min(1,s.redline+dt*0.4);if(s.redline>=1){s.redline=0;s.heat=Math.min(HEAT_MAX,s.heat+1.2);addNitro(0.35);addScore(600);popup("🔥 REDLINE!",0xff4d6a,car.position.x,3,car.position.z);audio.nitro&&audio.nitro();shakeAdd(0.3);flashHeat();}}
+      else s.redline=Math.max(0,s.redline-dt*0.5);
       // ---- advance along the circuit ----
-      const adv=s.speed*dt;s.dist+=Math.max(0,adv);if(adv>0)missionEvent("dist",adv);
+      const adv=s.speed*dt*tScale;s.dist+=Math.max(0,adv);if(adv>0)missionEvent("dist",adv);
       const prevT=s.t;const sl=segLen(s.t);s.t+=adv/Math.max(1,sl);
       if(s.t<0)s.t+=NODES;                                    // reversed past the start line — wrap, no lap
       if(s.t>=NODES){s.t-=NODES;s.lap++;
@@ -4905,6 +4997,8 @@ three/build/three.module.js:
       // power-ups
       for(const p of powerups){if(p.mesh.visible){p.gem.rotation.y+=dt*2.4;p.ring.rotation.z+=dt*1.6;p.mesh.position.y=trackAt(p.idx).y+1.8+Math.sin(time*3+p.idx)*0.2;}let d=Math.abs(((s.t-p.idx+NODES)%NODES));if(d>NODES/2)d=NODES-d;if(d<0.9&&!p.used){p.used=1;p.mesh.visible=false;applyPowerup(p.type);setTimeout(()=>{if(state.phase==="playing"){p.used=0;p.mesh.visible=true;}},12000);}}
       if(s.pw.x2>0)s.pw.x2=Math.max(0,s.pw.x2-dt);if(s.pw.magnet>0)s.pw.magnet=Math.max(0,s.pw.magnet-dt);
+      // ---- mystery crates ----
+      for(const p of crates){if(p.mesh.visible){p.box.rotation.y+=dt*1.8;p.box.rotation.x+=dt*0.9;p.mesh.position.y=trackAt(p.idx).y+1.9+Math.sin(time*2.5+p.idx)*0.25;}let d=Math.abs(((s.t-p.idx+NODES)%NODES));if(d>NODES/2)d=NODES-d;if(d<1.0&&!p.used){p.used=1;p.mesh.visible=false;openCrate();setTimeout(()=>{if(state.phase==="playing"){p.used=0;p.mesh.visible=true;}},14000);}}
       // ---- combo chain decay ----
       if(s.chainT>0){s.chainT-=dt;if(s.chainT<=0)comboBreak();}
       // ---- guns ----
@@ -4940,16 +5034,23 @@ three/build/three.module.js:
         if(!r.alive){continue;}
         let dT0=((r.t-s.t+NODES)%NODES);if(dT0>NODES/2)dT0-=NODES;
         const rb=dT0<0?1.2:(dT0>12?0.9:1.0);            // rubber-band: trailing rivals catch up
-        r.spd=rubberBase*(0.6+((r.ph%1))*0.16)*rb;
-        r.t=(r.t+(r.spd*dt)/Math.max(1,segLen(Math.floor(r.t))))%NODES;
+        r.spd=rubberBase*(0.6+((r.ph%1))*0.16)*rb*(r.nemesis?1.14:1);
+        r.t=(r.t+(r.spd*dt*tScale)/Math.max(1,segLen(Math.floor(r.t))))%NODES;
         const rn=trackAt(r.t);r.mesh.position.set(rn.x+rn.nx*r.lane+rn.ux*0.3,rn.y+rn.ny*r.lane+rn.uy*0.3,rn.z+rn.nz*r.lane+rn.uz*0.3);orientTo(r.mesh,rn);if(r.mesh.userData.flame)r.mesh.userData.flame.scale.set(1,1+Math.sin(time*30+r.ph)*0.3,1);
         let dT=((r.t-s.t+NODES)%NODES);if(dT>NODES/2){dT-=NODES;}
         const laneGap=Math.abs(r.lane-s.lane);
         if(Math.abs(dT)<0.9&&laneGap<3.0){
           const fast=s.boostVis>0.3||s.speed>CRUISE*1.02;
+          const wasNem=r.nemesis;
           takedown(r,r.mesh.position.x,r.mesh.position.z);   // the other car always gets launched & explodes
           if(!fast)hurt();                                    // ...but a slow clip damages you too
-        } else if(Math.abs(dT)<0.7&&laneGap<4.6&&!r.nm){r.nm=true;addScore(90);addNitro(0.08);if(s.odActive<=0)s.od=Math.min(1,s.od+0.05);popup("CLOSE! +90",0xffe08a,r.mesh.position.x,2,r.mesh.position.z);meta.tot.near++;missionEvent("near",1);}
+          else{s.heat=Math.min(HEAT_MAX,s.heat+(wasNem?1.4:0.5));comboEsc(wasNem);if(wasNem){addScore(500);toast("☠ NEMESIS DOWN +500","#ffd76a");}}
+        } else if(Math.abs(dT)<0.7&&laneGap<5.0&&!r.nm){r.nm=true;
+          // ---- PERFECT PASS: a high-speed near-miss triggers bullet-time + a heat surge (Burnout-style rush) ----
+          const fast=s.speed>CRUISE*1.05;
+          if(fast){s.slowmo=0.5;s.heat=Math.min(HEAT_MAX,s.heat+0.6);addScore(160);addNitro(0.14);popup("⚡ PERFECT PASS!",0x8affff,r.mesh.position.x,2.4,r.mesh.position.z);audio.power&&audio.power();shakeAdd(0.18);}
+          else{addScore(90);addNitro(0.08);popup("CLOSE! +90",0xffe08a,r.mesh.position.x,2,r.mesh.position.z);}
+          if(s.odActive<=0)s.od=Math.min(1,s.od+0.05);meta.tot.near++;missionEvent("near",1);}
         if(dT>0.4&&dT<2.6&&laneGap<3.6)s.draft=1;   // slipstream: tucked in behind a rival
         if(Math.abs(dT)>3)r.nm=false;
       }
@@ -4961,6 +5062,14 @@ three/build/three.module.js:
       const spN=Math.min(1,s.speed/NITRO_SPD);const kmh=Math.round(s.speed*2.4);el.spVal.textContent=kmh;el.spFill.style.width=(spN*100)+"%";
       if(kmh>s.topSpeed){s.topSpeed=kmh;missionEvent("top",kmh);}missionEvent("score",s.score);
       el.nFill.style.width=(s.nitro*100)+"%";el.nbar.classList.toggle("nfull",s.nitro>=0.999);
+      // HEAT badge + redline + euphoria vignette
+      const heatN=(s.heat-1)/(HEAT_MAX-1);
+      el.heatBigV.textContent="×"+s.heat.toFixed(1);el.heatBig.classList.toggle("hot",s.heat>=3);
+      el.heatBig.style.transform="scale("+(1+heatN*0.5).toFixed(3)+")";
+      if(el.rlFill)el.rlFill.style.width=(s.redline*100)+"%";
+      el.heatVig.style.opacity=(Math.min(1,heatN*1.1)*0.85+spN*0.15).toFixed(2);
+      if(bloom)bloom.strength=0.62+heatN*0.5+s.boostVis*0.3;   // the glow swells as you heat up
+      if(_heatFlashT>0){_heatFlashT=Math.max(0,_heatFlashT-dt);el.heatFlash.style.opacity=(_heatFlashT).toFixed(2);}else if(el.heatFlash.style.opacity!=="0")el.heatFlash.style.opacity="0";
       audio.setEngineIntensity(spN);
       if(s.invuln>0)s.invuln-=dt;if(s.hurtT>0){s.hurtT-=dt;el.hurtFlash.style.opacity=s.hurtT.toFixed(2);}else el.hurtFlash.style.opacity="0";
 
@@ -4975,20 +5084,25 @@ three/build/three.module.js:
       s.shake*=Math.pow(0.0009,dt);if(s.shake<0.01)s.shake=0;const vib=(spN*0.06+s.boostVis*0.08);const sh=s.shake+vib;
       const behind=trackAt(s.t-(CAM_DIST+s.boostVis*2.6+loopness*20)/NODE_SP);const aheadP=trackAt(s.t+LOOK_AHEAD/NODE_SP);
       const camOff=CAM_H+s.carY*0.5+loopness*10;                  // rise above the loop for a clean wide vantage
-      const desiredX=behind.x+behind.nx*s.lane*0.6;
+      // swing the camera sideways OPPOSITE the turn (like a real chase rig whipping through a corner) → you feel the steer
+      const swing=s.camSwing*(1-loopness);
+      const desiredX=behind.x+behind.nx*(s.lane*0.6 - swing*4.5);
       const desiredY=behind.y+camOff;                            // world-up height (stable, never inverts)
-      const desiredZ=behind.z+behind.nz*s.lane*0.6;
+      const desiredZ=behind.z+behind.nz*(s.lane*0.6 - swing*4.5);
       const lp=Math.min(1,dt*5);
       camera.position.x+=(desiredX-camera.position.x)*lp+(Math.random()-0.5)*sh*0.5;
       camera.position.y+=(desiredY-camera.position.y)*lp+(Math.random()-0.5)*sh*0.35;
       camera.position.z+=(desiredZ-camera.position.z)*lp+(Math.random()-0.5)*sh*0.5;
-      s.camLean=(s.camLean||0)+((-steer*0.05)-(s.camLean||0))*Math.min(1,dt*6);   // subtle lean into corners
+      s.camLean=(s.camLean||0)+((-swing*0.14)-(s.camLean||0))*Math.min(1,dt*6);   // roll into corners (banking)
       camera.up.set(s.camLean,1,0).normalize();                  // keep upright — car is always identifiable
       const la=5.2+s.carY*0.6;
       // flat: aim ahead & up (car sits low in frame). loop: aim AT the car so it stays centred & visible.
       const tX=aheadP.x+aheadP.ux*la, tY=aheadP.y+aheadP.uy*la, tZ=aheadP.z+aheadP.uz*la;
       camera.lookAt(tX+(cx-tX)*loopness, tY+(cy+2-tY)*loopness, tZ+(cz-tZ)*loopness);
-      camFov+=((60+s.boostVis*20+spN*12)-camFov)*Math.min(1,dt*4);camera.fov=camFov;camera.updateProjectionMatrix();
+      // FOV punches out with speed / boost / HEAT and with bullet-time zooms IN → visceral sense of velocity
+      const heatNc=(s.heat-1)/(HEAT_MAX-1);
+      const fovTarget=(s.slowmo>0?52:62)+s.boostVis*22+spN*14+heatNc*8;
+      camFov+=(fovTarget-camFov)*Math.min(1,dt*4);camera.fov=camFov;camera.updateProjectionMatrix();
 
       miniAcc+=dt;if(miniAcc>0.08){miniAcc=0;drawMinimap();}
     } else {
