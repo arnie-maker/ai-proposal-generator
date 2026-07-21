@@ -4423,7 +4423,10 @@ three/build/three.module.js:
     return car;
   }
   function applySkin(id){const sk=SKINS.find(s=>s.id===id)||SKINS[0];carParts.skinA.forEach(m=>{m.color.setHex(sk.a);if(m.emissive)m.emissive.setHex(sk.a);});carParts.skinB.forEach(m=>{m.color.setHex(sk.b);if(m.emissive)m.emissive.setHex(sk.b);});if(carParts.under)carParts.under.color.setHex(sk.a);}
-  function makeRival(hue){const g=new THREE.Group();const M=(o)=>new THREE.MeshStandardMaterial(o);const col=hue;const body=new THREE.Mesh(new THREE.BoxGeometry(2,0.5,3.4),M({color:0x181c2c,metalness:0.85,roughness:0.3,emissive:0x0a0e18,emissiveIntensity:0.4}));body.position.y=0.5;g.add(body);const nose=new THREE.Mesh(new THREE.ConeGeometry(0.6,1.5,4),M({color:0x181c2c,metalness:0.85,roughness:0.3}));nose.rotation.x=-Math.PI/2;nose.rotation.z=Math.PI/4;nose.position.set(0,0.5,-2);g.add(nose);const glow=new THREE.Mesh(new THREE.BoxGeometry(2.1,0.08,3),M({color:col,emissive:col,emissiveIntensity:2.4}));glow.position.y=0.2;g.add(glow);const cn=new THREE.Mesh(new THREE.SphereGeometry(0.55,14,10,0,Math.PI*2,0,Math.PI/2),M({color:0x66ff88,emissive:0x2c7a3a,emissiveIntensity:0.7,transparent:true,opacity:0.8}));cn.scale.set(1,0.8,1.4);cn.position.set(0,0.7,-0.2);g.add(cn);const flame=new THREE.Mesh(new THREE.ConeGeometry(0.3,1.2,10),M({color:col,emissive:col,emissiveIntensity:2.6,transparent:true,opacity:0.9}));flame.rotation.x=-Math.PI/2;flame.position.set(0,0.5,2.4);g.add(flame);g.userData.flame=flame;return g;}
+  function makeRival(hue){const g=new THREE.Group();const M=(o)=>new THREE.MeshStandardMaterial(o);const col=hue;const body=new THREE.Mesh(new THREE.BoxGeometry(2,0.5,3.4),M({color:0x181c2c,metalness:0.85,roughness:0.3,emissive:0x0a0e18,emissiveIntensity:0.4}));body.position.y=0.5;g.add(body);const nose=new THREE.Mesh(new THREE.ConeGeometry(0.6,1.5,4),M({color:0x181c2c,metalness:0.85,roughness:0.3}));nose.rotation.x=-Math.PI/2;nose.rotation.z=Math.PI/4;nose.position.set(0,0.5,-2);g.add(nose);const glow=new THREE.Mesh(new THREE.BoxGeometry(2.1,0.08,3),M({color:col,emissive:col,emissiveIntensity:2.4}));glow.position.y=0.2;g.add(glow);const cn=new THREE.Mesh(new THREE.SphereGeometry(0.55,14,10,0,Math.PI*2,0,Math.PI/2),M({color:0x66ff88,emissive:0x2c7a3a,emissiveIntensity:0.7,transparent:true,opacity:0.8}));cn.scale.set(1,0.8,1.4);cn.position.set(0,0.7,-0.2);g.add(cn);const flame=new THREE.Mesh(new THREE.ConeGeometry(0.3,1.2,10),M({color:col,emissive:col,emissiveIntensity:2.6,transparent:true,opacity:0.9}));flame.rotation.x=-Math.PI/2;flame.position.set(0,0.5,2.4);g.add(flame);g.userData.flame=flame;
+    // bright red tail-lights — you approach traffic from behind, so these read instantly as "car ahead, dodge!"
+    for(const sx of[-0.7,0.7]){const tl=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.34,0.14),M({color:0xff2b3c,emissive:0xff2030,emissiveIntensity:3.2}));tl.position.set(sx,0.55,1.8);g.add(tl);}
+    return g;}
 
   /* ============================ DOM + STORAGE ============================ */
   const app=document.getElementById("app");
@@ -4777,13 +4780,13 @@ three/build/three.module.js:
   /* ============================ RIVALS (alien racers) ============================ */
   const RIVAL_HP=2;
   const rivals=[];const rivalHues=[0xff2bd6,0x66ffcc,0xffb43a,0xb060ff,0xff5a7a];
-  const NTRAFFIC=15;
-  for(let i=0;i<NTRAFFIC;i++){const mesh=makeRival(rivalHues[i%rivalHues.length]);scene.add(mesh);rivals.push({mesh,t:(i+1)/(NTRAFFIC+1)*NODES,lane:(Math.random()-0.5)*ROAD_HW*1.6,spd:CRUISE*(0.5+Math.random()*0.2),alive:true,ph:Math.random()*6.28,name:RIVAL_NAMES[i%RIVAL_NAMES.length],nm:false,launch:null,hp:RIVAL_HP,respawnT:null});}
+  const NTRAFFIC=15, TRAFFIC_SCALE=1.5;
+  for(let i=0;i<NTRAFFIC;i++){const mesh=makeRival(rivalHues[i%rivalHues.length]);mesh.scale.setScalar(TRAFFIC_SCALE);scene.add(mesh);rivals.push({mesh,t:(i+1)/(NTRAFFIC+1)*NODES,lane:(Math.random()-0.5)*ROAD_HW*1.6,spd:CRUISE*(0.5+Math.random()*0.2),alive:true,ph:Math.random()*6.28,name:RIVAL_NAMES[i%RIVAL_NAMES.length],nm:false,launch:null,hp:RIVAL_HP,respawnT:null});}
   function placeRivals(){rivals.forEach((r,i)=>{r.t=((state.t+ 14 + (i+1)*(NODES/(NTRAFFIC+2))) )%NODES;r.lane=(Math.random()-0.5)*ROAD_HW*1.6;r.spd=CRUISE*(0.5+Math.random()*0.2);r.alive=true;r.mesh.visible=true;r.mesh.rotation.set(0,0,0);r.nm=false;r.launch=null;r.hp=RIVAL_HP;r.respawnT=null;r.name=GEN.rival(Math.floor(Math.random()*GEN.COUNTS.Rivals));});}
   // ---- NEMESIS: one bigger, gold, tougher rival that runs faster & is worth a fortune — a personal rivalry to chase ----
-  function assignNemesis(){rivals.forEach(r=>{r.nemesis=false;r.mesh.scale.setScalar(1);if(r._nemMark)r._nemMark.visible=false;});
+  function assignNemesis(){rivals.forEach(r=>{r.nemesis=false;r.mesh.scale.setScalar(TRAFFIC_SCALE);if(r._nemMark)r._nemMark.visible=false;});
     const r=rivals[Math.floor(Math.random()*rivals.length)];if(!r)return;
-    r.nemesis=true;r.name="NEMESIS";r.hp=RIVAL_HP+2;r.mesh.scale.setScalar(1.3);
+    r.nemesis=true;r.name="NEMESIS";r.hp=RIVAL_HP+2;r.mesh.scale.setScalar(TRAFFIC_SCALE*1.25);
     if(!r._nemMark){const m=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.16,8,6),new THREE.MeshBasicMaterial({color:0xffd76a,transparent:true,opacity:0.65,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));m.position.y=4;r.mesh.add(m);r._nemMark=m;}
     r._nemMark.visible=true;}
 
@@ -5132,7 +5135,7 @@ three/build/three.module.js:
       if(s.lane>edge){s.lane=edge;if(s.air<=0){s.speed*=0.9;}}
       if(s.lane<-edge){s.lane=-edge;if(s.air<=0){s.speed*=0.9;}}
       // drift yaw (visual slide) — stronger so the nose visibly points where you steer
-      const yawTarget=drifting?-steer*0.55:( -steer*0.26 );
+      const yawTarget=drifting?-steer*0.6:( -steer*0.42 );        // nose snaps toward where you steer
       s.driftYaw+=(yawTarget-s.driftYaw)*Math.min(1,dt*9);
       if(drifting){s.driftHold+=dt;s.driftTime+=dt;missionEvent("drift",dt);addNitro(dt*0.24*NITRO_MUL);if(s.odActive<=0)s.od=Math.min(1,s.od+dt*0.05);if(Math.random()<0.6)puffSmoke(car.position.x-steer*0.6,0.3,car.position.z+1.6,0xbfc8dd);}
       else{if(s.driftHold>1.3){const b=Math.round(120*Math.min(3,s.driftHold));addScore(b);addNitro(0.16);popup("PERFECT DRIFT +"+b,0x8affff,car.position.x,2.4,car.position.z);meta.tot.pdrift++;missionEvent("pdrift",1);audio.power&&audio.power();}s.driftHold=0;}
@@ -5208,7 +5211,7 @@ three/build/three.module.js:
       orientTo(car,pn);                                            // base orientation from the track frame
       car.rotateY(s.driftYaw);                                     // drift slide (yaw about local up)
       if(s.air>0)car.rotateX(Math.max(-0.55,Math.min(0.55,s.vy*0.03)));  // trajectory pitch: nose up rising, down falling
-      car.rotateZ((-steer*0.2)+(s.driftYaw*0.3));                  // lean into the corner
+      car.rotateZ((-steer*0.45)+(s.driftYaw*0.3));                 // hard bank into the dodge → you feel the car react
       if(s.landSquash>0){const q=s.landSquash/0.2;car.scale.set(CAR_SCALE*(1+q*0.22),CAR_SCALE*(1-q*0.28),CAR_SCALE*(1+q*0.22));}else car.scale.setScalar(CAR_SCALE);
       if(carParts.flames)for(const fl of carParts.flames){const sc=0.35+s.boostVis*2.0+Math.sin(time*44)*0.07;fl.scale.set(1+s.boostVis*0.3,sc,1+s.boostVis*0.3);}
       if(carParts.flameInner)for(const fi of carParts.flameInner){const sc=0.4+s.boostVis*2.2+Math.sin(time*60)*0.08;fi.scale.set(1,sc,1);fi.material.opacity=0.5+s.boostVis*0.5;}
@@ -5228,10 +5231,10 @@ three/build/three.module.js:
         if(r.launch){const L=r.launch;L.t+=dt;r.mesh.position.x+=L.vx*dt;r.mesh.position.y+=L.vy*dt;r.mesh.position.z+=L.vz*dt;L.vy-=22*dt;r.mesh.rotation.x+=L.rx*dt;r.mesh.rotation.z+=L.rz*dt;if(Math.random()<0.3)fireball(r.mesh.position.x,r.mesh.position.y,r.mesh.position.z,1.0);if(L.t>1.1){r.launch=null;r.alive=false;r.respawnT=1.0;}continue;}
         if(!r.alive){if(r.respawnT!=null){r.respawnT-=dt;if(r.respawnT<=0){r.respawnT=null;r.t=(s.t+(24+Math.random()*44))%NODES;r.lane=(Math.random()-0.5)*(ROAD_HW*1.7);r.alive=true;r.nm=false;r.hp=RIVAL_HP;r.mesh.visible=true;r.mesh.rotation.set(0,0,0);}}continue;}
         // slower than you → you always catch up → the road is a stream of obstacles to thread
-        r.spd=CRUISE*(0.40+0.34*(r.ph%1));
+        r.spd=CRUISE*(0.18+0.26*(r.ph%1));                        // much slower → high closing speed → traffic RUSHES up at you
         r.t=(r.t+(r.spd*dt*tScale)/Math.max(1,segLen(Math.floor(r.t))))%NODES;
         let dTs=((r.t-s.t+NODES)%NODES);if(dTs>NODES/2)dTs-=NODES;
-        if(dTs<-5){r.t=(s.t+(24+Math.random()*44))%NODES;r.lane=(Math.random()-0.5)*(ROAD_HW*1.7);r.nm=false;}   // recycle overtaken traffic ahead → endless flow
+        if(dTs<-4){r.t=(s.t+(14+Math.random()*30))%NODES;r.lane=(Math.random()-0.5)*(ROAD_HW*1.7);r.nm=false;}   // recycle CLOSE ahead → frequent, in-your-face encounters
         const rn=trackAt(r.t);r.mesh.position.set(rn.x+rn.nx*r.lane+rn.ux*0.3,rn.y+rn.ny*r.lane+rn.uy*0.3,rn.z+rn.nz*r.lane+rn.uz*0.3);orientTo(r.mesh,rn);if(r.mesh.userData.flame)r.mesh.userData.flame.scale.set(1,1+Math.sin(time*24+r.ph)*0.25,1);
         let dT=((r.t-s.t+NODES)%NODES);if(dT>NODES/2)dT-=NODES;
         const laneGap=Math.abs(r.lane-s.lane);
@@ -5282,9 +5285,9 @@ three/build/three.module.js:
       // swing the camera sideways OPPOSITE the turn (like a real chase rig whipping through a corner) → you feel the steer
       const swing=s.camSwing*(1-loopness);
       // track the car tightly (0.85) so it stays framed and the WORLD sweeps when you steer → reads as carving, not sliding
-      const desiredX=behind.x+behind.nx*(s.lane*0.85 - swing*2.6);
+      const desiredX=behind.x+behind.nx*(s.lane*0.6 - swing*1.8);   // partial lane-follow → car darts in-frame but never leaves it
       const desiredY=behind.y+camOff;                            // world-up height (stable, never inverts)
-      const desiredZ=behind.z+behind.nz*(s.lane*0.85 - swing*2.6);
+      const desiredZ=behind.z+behind.nz*(s.lane*0.6 - swing*1.8);
       const lp=Math.min(1,dt*7);                                 // snappier, more connected camera
       camera.position.x+=(desiredX-camera.position.x)*lp+(Math.random()-0.5)*sh*0.4;
       camera.position.y+=(desiredY-camera.position.y)*lp+(Math.random()-0.5)*sh*0.3;
@@ -5293,7 +5296,7 @@ three/build/three.module.js:
       camera.up.set(s.camLean,1,0).normalize();                  // keep upright — car is always identifiable
       const la=4.6+s.carY*0.6;
       // aim just ahead of the car AND follow its lane a little so the car sits low-centre and clearly steers
-      const tX=aheadP.x+aheadP.ux*la+pn.nx*s.lane*0.5, tY=aheadP.y+aheadP.uy*la, tZ=aheadP.z+aheadP.uz*la+pn.nz*s.lane*0.5;
+      const tX=aheadP.x+aheadP.ux*la+pn.nx*s.lane*0.28, tY=aheadP.y+aheadP.uy*la, tZ=aheadP.z+aheadP.uz*la+pn.nz*s.lane*0.28;   // keeps the darting car comfortably framed
       camera.lookAt(tX+(cx-tX)*loopness, tY+(cy+2-tY)*loopness, tZ+(cz-tZ)*loopness);
       // calmer FOV so the motion is legible (no nauseating zoom) — still lifts a touch with speed
       const heatNc=(s.heat-1)/(HEAT_MAX-1);
