@@ -209,7 +209,7 @@
   <div class="hud">
     <div class="glass panel tl">
       <div class="label">Score</div><div><span class="score gradient-text" id="score">0</span></div>
-      <div class="lap" style="color:#8fb0ff">LAP <span id="lap">1</span> · <span id="pos" style="color:#ffd76a">P1</span></div>
+      <div class="lap" style="color:#8fb0ff"><span id="pos" style="color:#ff6a8a">❤❤❤</span> · <span id="lap" style="color:#8affff">0m</span></div>
     </div>
     <div class="tr">
       <div class="glass panel" style="text-align:right"><div class="label">Best</div><div class="score" id="best" style="font-size:16px">0</div></div>
@@ -4314,18 +4314,18 @@ three/build/three.module.js:
 
   /* ==================== CAREER — a single clear next goal + reward, always pulling you forward ==================== */
   const CAREER=[
-    {g:"Finish your first race",m:x=>x.tot.wins,goal:1,rew:800},
-    {g:"Take down 10 racers",m:x=>x.tot.td,goal:10,rew:1000},
-    {g:"Score 12,000 in one run",m:x=>x.best,goal:12000,rew:1200},
+    {g:"Reach 700 m in a run",m:x=>x.bestDist,goal:700,rew:800},
+    {g:"Pull off 20 near-misses",m:x=>x.tot.near,goal:20,rew:1000},
+    {g:"Score 8,000 in a run",m:x=>x.best,goal:8000,rew:1200},
+    {g:"Reach 1,800 m in a run",m:x=>x.bestDist,goal:1800,rew:1400},
     {g:"Hit 400 km/h",m:x=>x.tot.top,goal:400,rew:1000},
-    {g:"Catch 12 big airs",m:x=>x.tot.air,goal:12,rew:1400},
-    {g:"Race 15,000 m total",m:x=>x.tot.dist,goal:15000,rew:1600},
-    {g:"Win 3 races",m:x=>x.tot.wins,goal:3,rew:2000},
-    {g:"Score 25,000 in one run",m:x=>x.best,goal:25000,rew:2600},
+    {g:"100 near-misses total",m:x=>x.tot.near,goal:100,rew:1600},
+    {g:"Score 18,000 in a run",m:x=>x.best,goal:18000,rew:2000},
+    {g:"Reach 3,500 m in a run",m:x=>x.bestDist,goal:3500,rew:2600},
     {g:"Reach Rank Pro",m:x=>x.best,goal:18000,rew:2200},
-    {g:"50 takedowns",m:x=>x.tot.td,goal:50,rew:3200},
-    {g:"Score 45,000 in one run",m:x=>x.best,goal:45000,rew:4500},
-    {g:"Win 10 races",m:x=>x.tot.wins,goal:10,rew:6000}
+    {g:"300 near-misses total",m:x=>x.tot.near,goal:300,rew:3200},
+    {g:"Score 35,000 in a run",m:x=>x.best,goal:35000,rew:4500},
+    {g:"Reach 6,000 m in a run",m:x=>x.bestDist,goal:6000,rew:6000}
   ];
   function careerCur(){const i=Math.min(meta.career||0,CAREER.length-1);const done=(meta.career||0)>=CAREER.length;const st=CAREER[i];const cur=Math.min(st.goal,st.m(meta));return {i,st,cur,pct:Math.min(100,Math.round(cur/st.goal*100)),done};}
   function checkCareer(){let adv=null;while((meta.career||0)<CAREER.length){const st=CAREER[meta.career||0];if(st.m(meta)>=st.goal){meta.coins+=st.rew;meta.career=(meta.career||0)+1;adv=st;}else break;}if(adv){saveMeta();updateMetaHud();}return adv;}
@@ -4441,6 +4441,7 @@ three/build/three.module.js:
     m.throttle=m.throttle||"auto";m.steerMode=m.steerMode||"wheel";
     m.circuit=m.circuit||1;m.liveryIndex=(m.liveryIndex==null?null:m.liveryIndex);m.trailIndex=(m.trailIndex==null?null:m.trailIndex);   // [content] procedural picks
     m.career=m.career||0;   // [career] current goal index
+    m.bestDist=m.bestDist||0;   // [survival] furthest run
     return m;}
   const meta=loadMeta();
   function saveMeta(){try{LS.set("save",JSON.stringify(meta));}catch(e){}}
@@ -4490,7 +4491,7 @@ three/build/three.module.js:
   const state={phase:"ready",t:0,lane:0,speed:0,steer:0,drift:0,nitroOn:0,nitro:0,driftYaw:0,
     score:0,takedowns:0,hp:3,lap:1,carY:0,vy:0,air:0,shake:0,hurtT:0,invuln:0,boostVis:0,
     mult:1,chain:0,chainT:0,maxChain:0,driftTime:0,nitroTime:0,dist:0,topSpeed:0,missions:[],coinsRun:0,
-    mode:"circuit",dcTask:null,driftHold:0,hitStop:0,crateReward:0,crateTier:"",gambled:false,hitThisRun:false,diff:1,screen:null,garageTab:"ships",firing:0,fireTimer:0,
+    mode:"endless",dcTask:null,driftHold:0,hitStop:0,crateReward:0,crateTier:"",gambled:false,hitThisRun:false,diff:1,screen:null,garageTab:"ships",firing:0,fireTimer:0,
     gas:0,braking:0,od:0,odActive:0,draft:0,pw:{shield:0,x2:0,magnet:0},started:0,startBoost:0,
     heat:1,heatWarm:0,redline:0,slowmo:0,noHit:0,flawless:0,launchT:0,launchLocked:0,camSwing:0,steerVel:0};
   const audio=new CyberpunkAudio();
@@ -4693,7 +4694,7 @@ three/build/three.module.js:
   const nitroPads=[];for(let k=0;k<14;k++){const idx=Math.floor((k+0.3)/14*NODES);if(ramps.includes(idx)||inLoopRange(idx))continue;const n=track[idx];const pad=new THREE.Mesh(new THREE.PlaneGeometry(ROAD_HW*1.1,3.4),new THREE.MeshBasicMaterial({color:0x33e0ff,transparent:true,opacity:0.34,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,depthWrite:false}));pad.rotation.x=-Math.PI/2;pad.rotation.z=-Math.atan2(n.tx,n.tz);pad.position.set(n.x,n.y+0.14,n.z);scene.add(pad);nitroPads.push({idx,used:0});}
   // ---- ORB RIBBON: a dense stream of collectibles that SNAKES across the road → you actively steer to grab it ----
   const coinPads=[];const coinGeo=new THREE.OctahedronGeometry(0.72,0);const coinMat=new THREE.MeshStandardMaterial({color:0xffe08a,emissive:0xffc24a,emissiveIntensity:2.6,metalness:0.4,roughness:0.28});
-  const NORB=140, WEAVES=6;   // count + how many left/right weaves around the whole loop (followable rhythm)
+  const NORB=80, WEAVES=5;    // a lighter reward line — dodging traffic is the star now
   for(let k=0;k<NORB;k++){const idxF=(k+0.5)/NORB*NODES;const ii=Math.floor(idxF)%NODES;if(ramps.includes(ii)||inLoopRange(ii))continue;const n=track[ii];
     const lane=Math.sin((k/NORB)*Math.PI*2*WEAVES)*(ROAD_HW-2.6);          // the snaking line
     const m=new THREE.Mesh(coinGeo,coinMat);m.position.set(n.x+n.nx*lane,n.y+1.2,n.z+n.nz*lane);scene.add(m);
@@ -4776,8 +4777,9 @@ three/build/three.module.js:
   /* ============================ RIVALS (alien racers) ============================ */
   const RIVAL_HP=2;
   const rivals=[];const rivalHues=[0xff2bd6,0x66ffcc,0xffb43a,0xb060ff,0xff5a7a];
-  for(let i=0;i<7;i++){const mesh=makeRival(rivalHues[i%rivalHues.length]);scene.add(mesh);rivals.push({mesh,t:(i+1)/8*NODES,lane:(Math.random()-0.5)*ROAD_HW*1.2,spd:CRUISE*(0.62+Math.random()*0.16),alive:true,ph:Math.random()*6.28,name:RIVAL_NAMES[i%RIVAL_NAMES.length],nm:false,launch:null,hp:RIVAL_HP});}
-  function placeRivals(){rivals.forEach((r,i)=>{r.t=((state.t+ (i+1)*(NODES/9)) )%NODES;r.lane=(Math.random()-0.5)*ROAD_HW*1.2;r.spd=CRUISE*(0.60+Math.random()*0.16);r.alive=true;r.mesh.visible=true;r.mesh.rotation.set(0,0,0);r.nm=false;r.launch=null;r.hp=RIVAL_HP;r.name=GEN.rival(Math.floor(Math.random()*GEN.COUNTS.Rivals));});}
+  const NTRAFFIC=15;
+  for(let i=0;i<NTRAFFIC;i++){const mesh=makeRival(rivalHues[i%rivalHues.length]);scene.add(mesh);rivals.push({mesh,t:(i+1)/(NTRAFFIC+1)*NODES,lane:(Math.random()-0.5)*ROAD_HW*1.6,spd:CRUISE*(0.5+Math.random()*0.2),alive:true,ph:Math.random()*6.28,name:RIVAL_NAMES[i%RIVAL_NAMES.length],nm:false,launch:null,hp:RIVAL_HP,respawnT:null});}
+  function placeRivals(){rivals.forEach((r,i)=>{r.t=((state.t+ 14 + (i+1)*(NODES/(NTRAFFIC+2))) )%NODES;r.lane=(Math.random()-0.5)*ROAD_HW*1.6;r.spd=CRUISE*(0.5+Math.random()*0.2);r.alive=true;r.mesh.visible=true;r.mesh.rotation.set(0,0,0);r.nm=false;r.launch=null;r.hp=RIVAL_HP;r.respawnT=null;r.name=GEN.rival(Math.floor(Math.random()*GEN.COUNTS.Rivals));});}
   // ---- NEMESIS: one bigger, gold, tougher rival that runs faster & is worth a fortune — a personal rivalry to chase ----
   function assignNemesis(){rivals.forEach(r=>{r.nemesis=false;r.mesh.scale.setScalar(1);if(r._nemMark)r._nemMark.visible=false;});
     const r=rivals[Math.floor(Math.random()*rivals.length)];if(!r)return;
@@ -4815,9 +4817,11 @@ three/build/three.module.js:
     if(r.name)popup("💥 "+r.name,0xffffff,wx,3.4,wz);state.hitStop=state.chain>=3?0.07:0.04;
     meta.tot.td++;missionEvent("td",1);checkAch();
     setTimeout(()=>{if(state.phase==="playing"){r.t=(state.t+NODES*0.5)%NODES;r.lane=(Math.random()-0.5)*ROAD_HW*1.2;r.alive=true;r.mesh.visible=true;r.nm=false;r.launch=null;r.hp=RIVAL_HP;}},3500);}
-  function hurt(){if(state.invuln>0||state.odActive>0)return;if(state.pw&&state.pw.shield>0){state.pw.shield=0;state.invuln=1.0;shakeAdd(0.3);toast("🛡️ Shield absorbed it!","#66ccff");return;}state.hp--;state.hitThisRun=true;state.invuln=1.3;state.hurtT=0.4;state.speed*=0.5;comboBreak();audio.crash();shakeAdd(0.5);
-    if(state.heat>2.2)popup("HEAT LOST ×"+state.heat.toFixed(1),0xff4d6a,car.position.x,3,car.position.z);
-    state.heat=1;state.heatTier=1;state.noHit=0;state._flaw=0;state.redline=0;                 // crash wipes your multiplier — the sting that makes you careful
+  function hurt(){if(state.invuln>0||state.odActive>0)return;if(state.pw&&state.pw.shield>0){state.pw.shield=0;state.invuln=1.1;shakeAdd(0.35);toast("🛡️ Shield saved you!","#66ccff");return;}
+    state.hp--;state.hitThisRun=true;state.invuln=1.4;state.hurtT=0.55;state.speed*=0.38;comboBreak();audio.crash();shakeAdd(0.7);
+    carExplode(car.position.x,car.position.y+0.5,car.position.z,0xff6a2a);puffSmoke(car.position.x,0.4,car.position.z,0xff8844);
+    const hadHeat=state.heat;state.heat=1;state.heatTier=1;state.noHit=0;state._flaw=0;state.redline=0;   // crash WIPES your multiplier — the sting
+    if(state.hp>0)bigBanner((state.hp===1?"⚠ LAST LIFE!":"CRASH!")+(hadHeat>2.5?"  ×"+hadHeat.toFixed(1)+" lost":""),state.hp===1?"#ff4d6a":"#ffa24d");
     if(state.hp<=0)endGame(false);}
 
   /* ===== session missions (Zeigarnik open loops) ===== */
@@ -4890,7 +4894,7 @@ three/build/three.module.js:
         modeBtns+
         '<div class="tabs" style="margin:4px 0"><span class="tab" id="circBtn" style="color:#8affff;border:1px solid rgba(0,229,255,0.4)">🌀 '+GEN.circuit(meta.circuit||1).name+' #'+(meta.circuit||1)+' 🎲</span><span class="tab" id="colBtn" style="color:#ffd76a">🗂️ Collection 10,000+</span></div>'+
         '<div class="rowbtns"><button class="btn-gradient" id="startBtn">▶ Race</button><button class="tab" id="garageBtn" style="padding:12px 16px">🏁 Garage</button><button class="tab" id="lbBtn" style="padding:12px 16px">🏆 Ranks</button><button class="tab" id="setBtn" style="padding:12px 16px">⚙️ Controls</button>'+prestigeBtn+'</div>'+
-        '<div class="hint">Drag wheel to steer · 🔥 nitro · 🌀 drift corners · take down rivals<br><span class="kbd-hint">← → steer · ↑/Shift nitro · ↓/Space drift</span></div>';
+        '<div class="hint"><b>Weave through traffic</b> — a hit costs a life (❤❤❤). Skim past for <b style="color:#8affff">near-misses</b> to build HEAT ×. It gets faster the further you go.<br><span class="kbd-hint">← → steer · S/↓ brake to thread gaps · ↑/Shift nitro</span></div>';
       $("startBtn").addEventListener("click",startGame);$("garageBtn").addEventListener("click",openGarage);
       $("lbBtn").addEventListener("click",()=>{state.screen="lb";renderOverlay();});
       $("setBtn").addEventListener("click",()=>{state.screen="set";renderOverlay();});
@@ -4911,8 +4915,10 @@ three/build/three.module.js:
         (state.careerAdv?'<div style="color:#8affff;font-weight:800;margin:2px 0 4px">🎯 CAREER GOAL! '+state.careerAdv.g+' — +'+state.careerAdv.rew.toLocaleString()+'💰</div>':'')+
         (state.newBest?'<div style="color:#ffd76a;font-weight:800;margin:2px 0 4px">🏆 NEW BEST!</div>':'')+
         (state.rankUp?'<div style="color:#8affff;font-weight:800;margin:2px 0 4px">⬆️ RANK UP — '+state.rankUp+'!</div>':'')+
-        '<div style="font-size:12px;color:#9fd8ff;margin:2px 0 4px">Leaderboard: <b>#'+state.lbRank+'</b> · faster than '+Math.max(1,Math.round((1-(state.lbRank/Math.max(state.lbRank,meta.lb.length)))*100))+'%</div>'+
-        '<div class="row"><div class="stat"><div class="v">'+state.score.toLocaleString()+'</div><div class="l">Score</div></div><div class="stat"><div class="v">'+state.takedowns+'</div><div class="l">Takedowns</div></div><div class="stat"><div class="v">'+lapTxt+'</div><div class="l">Laps</div></div></div>'+
+        (state.distBest?'<div style="color:#8affff;font-weight:800;margin:2px 0 4px">🛣️ FURTHEST RUN!</div>':'')+
+        '<div style="font-size:12px;color:#9fd8ff;margin:2px 0 4px">Leaderboard: <b>#'+state.lbRank+'</b> · top '+Math.max(1,Math.round((state.lbRank/Math.max(state.lbRank,meta.lb.length))*100))+'%</div>'+
+        '<div class="row"><div class="stat"><div class="v">'+Math.round(state.dist).toLocaleString()+'m</div><div class="l">Distance</div></div><div class="stat"><div class="v">'+state.score.toLocaleString()+'</div><div class="l">Score</div></div><div class="stat"><div class="v">'+(state.dodges||0)+'</div><div class="l">Dodges</div></div></div>'+
+        '<div style="font-size:11px;color:#8892b0;margin:-2px 0 4px">Best distance <b style="color:#8affff">'+Math.round(meta.bestDist).toLocaleString()+'m</b></div>'+
         '<div class="earn"><span>💰 <b style="color:#ffd76a">+'+state.coinsRun+'</b>'+(state.dbl?' <span style="color:#66ffcc">(2x!)</span>':'')+'</span><span>✨ <b style="color:#c4b5fd">+'+state.xpGain+'</b> XP</span><span>🎯 <b>'+doneM+'/'+state.missions.length+'</b></span></div>'+
         (state.cleanBonus?'<div style="font-size:12px;color:#66ffcc;margin:-2px 0 4px">✨ Clean race bonus +'+state.cleanBonus+'💰</div>':'')+
         xpBar()+ crateHtml+
@@ -5035,7 +5041,7 @@ three/build/three.module.js:
     state.mult=1;state.chain=0;state.chainT=0;state.maxChain=0;state.driftTime=0;state.nitroTime=0;state.dist=0;state.topSpeed=0;state.coinsRun=0;state.newBest=false;state.crateOpened=false;
     state.driftHold=0;state.hitStop=0;state.hitThisRun=false;state.gambled=false;state.diff=1;state.firing=0;state.fireTimer=0;bolts.forEach(b=>{b.active=false;b.mesh.visible=false;});
     state.gas=0;state.braking=0;state.od=0;state.odActive=0;state.draft=0;state.pw={shield:0,x2:0,magnet:0};applyControlMode();powerups.forEach(p=>{p.used=0;p.mesh.visible=true;});
-    state.heat=1;state.heatTier=1;state.redline=0;state.noHit=0;state._flaw=0;state.slowmo=0;state.camSwing=0;state.scoreAcc=0;state.nextMile=5000;state.coinRun=0;document.body.classList.add("playing");
+    state.heat=1;state.heatTier=1;state.redline=0;state.noHit=0;state._flaw=0;state.slowmo=0;state.camSwing=0;state.scoreAcc=0;state.nextMile=5000;state.coinRun=0;state.dodges=0;state.passCombo=0;document.body.classList.add("playing");
     crates.forEach(c=>{c.used=0;c.mesh.visible=true;});assignNemesis();
     // ---- PERFECT LAUNCH: a quick rev-timing bar at the lights → nail it for a boost (a ritual every run) ----
     state.launchT=1.4;state.launchLocked=0;showLaunch();
@@ -5050,6 +5056,7 @@ three/build/three.module.js:
     if(won&&!state.hitThisRun){missionEvent("clean",1);state.cleanBonus=Math.round(400*COIN_MUL);}else state.cleanBonus=0;
     meta.tot.races++;if(won)meta.tot.wins++;meta.tot.dist+=Math.round(state.dist);meta.tot.top=Math.max(meta.tot.top,Math.round(state.topSpeed));
     state.newBest=state.score>meta.best;if(state.newBest)meta.best=state.score;
+    state.distBest=state.dist>meta.bestDist;if(state.distBest)meta.bestDist=state.dist;
     let base=Math.floor(state.score/50)+state.takedowns*6+(won?160:0)+Math.floor(state.dist/300)+state.cleanBonus;
     if(state.firstRunToday){base=Math.round(base*2);state.dbl=true;}else state.dbl=false;
     base=Math.round(base*COIN_MUL);
@@ -5099,10 +5106,13 @@ three/build/three.module.js:
       if(boosting){s.nitro=Math.max(0,s.nitro-dt*0.42);s.nitroTime+=dt;missionEvent("nitro",dt);}
       const gasOn=s.gas||keys.has("w")||keys.has("arrowup");
       const brakeOn=s.braking||keys.has("s")||keys.has("arrowdown");
+      // SPEED ESCALATION: the longer you survive, the faster it gets → harder dodging → tension climax
+      const spRamp=1+Math.min(1.35,s.dist/5200);s.spRamp=spRamp;
       let base;
       if(s.odActive>0)base=OVER_SPD;
-      else if(manual){base=brakeOn?REV_SPD:(gasOn?CRUISE:0);}
-      else base=brakeOn?CRUISE*0.35:CRUISE;                 // auto: always cruising (brake eases off)
+      else if(manual){base=brakeOn?REV_SPD:(gasOn?CRUISE*spRamp:0);}
+      else base=(brakeOn?CRUISE*0.5:CRUISE)*spRamp;          // brake is your survival tool — ease off to thread a gap
+      base=Math.min(OVER_SPD,base);
       if(s.draft>0)base=Math.max(base,CRUISE)*1.16;          // slipstream draft boost
       const target=s.odActive>0?OVER_SPD:(boosting?NITRO_SPD:base);
       const rate=(base<s.speed)?ACCEL*0.7:ACCEL;
@@ -5212,38 +5222,38 @@ three/build/three.module.js:
       updateTrail(cx,cz,cy);
 
       // ---- rivals ----
-      const rubberBase=CRUISE*s.diff;s.draft=0;
+      // ======== TRAFFIC = HAZARDS. Overtake slower cars; a hit CRASHES YOU, a clean near-miss is the reward. ========
+      s.draft=0;
       for(const r of rivals){
-        if(r.launch){const L=r.launch;L.t+=dt;r.mesh.position.x+=L.vx*dt;r.mesh.position.y+=L.vy*dt;r.mesh.position.z+=L.vz*dt;L.vy-=22*dt;r.mesh.rotation.x+=L.rx*dt;r.mesh.rotation.z+=L.rz*dt;if(Math.random()<0.35)fireball(r.mesh.position.x,r.mesh.position.y,r.mesh.position.z,1.1);if(L.t>1.1){r.mesh.visible=false;r.launch=null;}continue;}
-        if(!r.alive){continue;}
-        let dT0=((r.t-s.t+NODES)%NODES);if(dT0>NODES/2)dT0-=NODES;
-        const rb=dT0<0?1.2:(dT0>12?0.9:1.0);            // rubber-band: trailing rivals catch up
-        r.spd=rubberBase*(0.6+((r.ph%1))*0.16)*rb*(r.nemesis?1.14:1);
+        if(r.launch){const L=r.launch;L.t+=dt;r.mesh.position.x+=L.vx*dt;r.mesh.position.y+=L.vy*dt;r.mesh.position.z+=L.vz*dt;L.vy-=22*dt;r.mesh.rotation.x+=L.rx*dt;r.mesh.rotation.z+=L.rz*dt;if(Math.random()<0.3)fireball(r.mesh.position.x,r.mesh.position.y,r.mesh.position.z,1.0);if(L.t>1.1){r.launch=null;r.alive=false;r.respawnT=1.0;}continue;}
+        if(!r.alive){if(r.respawnT!=null){r.respawnT-=dt;if(r.respawnT<=0){r.respawnT=null;r.t=(s.t+(24+Math.random()*44))%NODES;r.lane=(Math.random()-0.5)*(ROAD_HW*1.7);r.alive=true;r.nm=false;r.hp=RIVAL_HP;r.mesh.visible=true;r.mesh.rotation.set(0,0,0);}}continue;}
+        // slower than you → you always catch up → the road is a stream of obstacles to thread
+        r.spd=CRUISE*(0.40+0.34*(r.ph%1));
         r.t=(r.t+(r.spd*dt*tScale)/Math.max(1,segLen(Math.floor(r.t))))%NODES;
-        const rn=trackAt(r.t);r.mesh.position.set(rn.x+rn.nx*r.lane+rn.ux*0.3,rn.y+rn.ny*r.lane+rn.uy*0.3,rn.z+rn.nz*r.lane+rn.uz*0.3);orientTo(r.mesh,rn);if(r.mesh.userData.flame)r.mesh.userData.flame.scale.set(1,1+Math.sin(time*30+r.ph)*0.3,1);
-        let dT=((r.t-s.t+NODES)%NODES);if(dT>NODES/2){dT-=NODES;}
+        let dTs=((r.t-s.t+NODES)%NODES);if(dTs>NODES/2)dTs-=NODES;
+        if(dTs<-5){r.t=(s.t+(24+Math.random()*44))%NODES;r.lane=(Math.random()-0.5)*(ROAD_HW*1.7);r.nm=false;}   // recycle overtaken traffic ahead → endless flow
+        const rn=trackAt(r.t);r.mesh.position.set(rn.x+rn.nx*r.lane+rn.ux*0.3,rn.y+rn.ny*r.lane+rn.uy*0.3,rn.z+rn.nz*r.lane+rn.uz*0.3);orientTo(r.mesh,rn);if(r.mesh.userData.flame)r.mesh.userData.flame.scale.set(1,1+Math.sin(time*24+r.ph)*0.25,1);
+        let dT=((r.t-s.t+NODES)%NODES);if(dT>NODES/2)dT-=NODES;
         const laneGap=Math.abs(r.lane-s.lane);
-        if(Math.abs(dT)<0.9&&laneGap<3.0){
-          const fast=s.boostVis>0.3||s.speed>CRUISE*1.02;
-          const wasNem=r.nemesis;
-          takedown(r,r.mesh.position.x,r.mesh.position.z);   // the other car always gets launched & explodes
-          if(!fast)hurt();                                    // ...but a slow clip damages you too
-          else{s.heat=Math.min(HEAT_MAX,s.heat+(wasNem?1.4:0.5));comboEsc(wasNem);if(wasNem){addScore(500);toast("☠ NEMESIS DOWN +500","#ffd76a");}}
-        } else if(Math.abs(dT)<0.85&&laneGap<6.0&&!r.nm){r.nm=true;
-          // ---- PERFECT PASS: a near-miss triggers a heat surge (+ bullet-time when you're really flying) ----
-          const fast=s.speed>CRUISE*0.98;s.passCombo=(s.passCombo||0)+1;s.passComboT=2.5;
-          if(fast){if((s.slowmoCd||0)<=0){s.slowmo=0.45;s.slowmoCd=1.4;}s.heat=Math.min(HEAT_MAX,s.heat+0.7);addScore(160+s.passCombo*20);addNitro(0.14);popup("⚡ PERFECT PASS ×"+s.passCombo,0x8affff,r.mesh.position.x,2.4,r.mesh.position.z);audio.ding&&audio.ding(6+s.passCombo);shakeAdd(0.16);}
-          else{addScore(90);addNitro(0.08);popup("CLOSE! +90",0xffe08a,r.mesh.position.x,2,r.mesh.position.z);}
-          if(s.odActive<=0)s.od=Math.min(1,s.od+0.05);meta.tot.near++;missionEvent("near",1);}
-        if(dT>0.4&&dT<2.6&&laneGap<3.6)s.draft=1;   // slipstream: tucked in behind a rival
-        if(Math.abs(dT)>3)r.nm=false;
+        if(Math.abs(dT)<0.72&&laneGap<2.5){                 // ---- COLLISION → YOU crash ----
+          if(s.invuln<=0&&s.odActive<=0){
+            const shield=s.pw&&s.pw.shield>0;hurt();          // lose a life + wipe the multiplier (endGame at 0 lives)
+            if(!shield){s.passCombo=0;const side=(r.lane>=s.lane)?1:-1;r.launch={t:0,vx:side*15+Math.random()*6,vy:9+Math.random()*5,vz:(Math.random()-0.5)*8,rx:(Math.random()-0.5)*12,rz:(Math.random()-0.5)*12};fireball(r.mesh.position.x,1,r.mesh.position.z,1.0);}
+          }
+        } else if(Math.abs(dT)<0.95&&laneGap<4.7&&!r.nm){r.nm=true;   // ---- NEAR MISS → the skill reward ----
+          s.passCombo=(s.passCombo||0)+1;s.passComboT=2.6;s.dodges=(s.dodges||0)+1;const tight=laneGap<3.3;
+          s.heat=Math.min(HEAT_MAX,s.heat+(tight?1.0:0.5));addScore((tight?150:80)+s.passCombo*22);addNitro(tight?0.12:0.06);
+          if(tight&&s.speed>CRUISE*1.05&&(s.slowmoCd||0)<=0){s.slowmo=0.4;s.slowmoCd=1.6;}
+          popup((tight?"⚡ PERFECT PASS":"NEAR MISS")+(s.passCombo>1?" ×"+s.passCombo:""),tight?0x8affff:0xffe08a,r.mesh.position.x,2.4,r.mesh.position.z);
+          audio.ding&&audio.ding(6+Math.min(20,s.passCombo));shakeAdd(tight?0.14:0.08);meta.tot.near++;missionEvent("near",1);
+        }
+        if(Math.abs(dT)>2.6)r.nm=false;
       }
-      let ahead=0;for(const r of rivals){if(!r.alive)continue;let dT=((r.t-s.t+NODES)%NODES);if(dT>NODES/2)dT-=NODES;if(dT<0)ahead++;}
-      el.pos.textContent="P"+(1+ (rivals.filter(r=>r.alive).length - rivals.filter(r=>{let dT=((r.t-s.t+NODES)%NODES);return r.alive&&dT>0&&dT<NODES/2;}).length));
-      el.draftInd.classList.toggle("on",s.draft>0);if(s.draft>0)addNitro(dt*0.16);
+      el.draftInd.classList.toggle("on",false);
 
       // ---- HUD ----
       const spN=Math.min(1,s.speed/NITRO_SPD);const kmh=Math.round(s.speed*2.4);el.spVal.textContent=kmh;el.spFill.style.width=(spN*100)+"%";
+      el.pos.textContent="❤".repeat(Math.max(0,s.hp))+"♡".repeat(Math.max(0,MAXHP-s.hp));el.lap.textContent=Math.round(s.dist)+"m";
       if(kmh>s.topSpeed){s.topSpeed=kmh;missionEvent("top",kmh);}missionEvent("score",s.score);
       el.nFill.style.width=(s.nitro*100)+"%";el.nbar.classList.toggle("nfull",s.nitro>=0.999);
       if(_scorePunch>0){el.score.style.transform="scale("+(1+_scorePunch*0.55).toFixed(3)+")";_scorePunch=Math.max(0,_scorePunch-dt*4);}else if(el.score.style.transform)el.score.style.transform="scale(1)";
