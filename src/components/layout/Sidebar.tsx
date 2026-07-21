@@ -7,6 +7,7 @@ import { useState } from "react";
 const navItems = [
   { href: "/", label: "Generate", icon: SparklesIcon },
   { href: "/proposals", label: "History", icon: ClockIcon },
+  { href: "/game", label: "Dino Crush", icon: DinoIcon },
 ];
 
 function SparklesIcon() {
@@ -22,6 +23,16 @@ function ClockIcon() {
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10" />
       <polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+
+function DinoIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 20v-3a4 4 0 0 1-4-4V9a5 5 0 0 1 5-5c3 0 5 2 6 4h2a2 2 0 0 1 2 2 3 3 0 0 1-3 3v3" />
+      <path d="M13 20v-2" />
+      <circle cx="12" cy="9" r="0.5" fill="currentColor" />
     </svg>
   );
 }

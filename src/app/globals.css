@@ -96,6 +96,42 @@ body {
   background: rgba(255, 255, 255, 0.2);
 }
 
+/* --- Dino Crush game animations --- */
+@keyframes dino-pop-in {
+  0% { transform: translateY(-14%) scale(0.6); opacity: 0; }
+  60% { transform: translateY(0) scale(1.08); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+.dino-pop {
+  animation: dino-pop-in 0.26s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes dino-clear-out {
+  0% { transform: scale(1) rotate(0); opacity: 1; }
+  40% { transform: scale(1.18) rotate(6deg); opacity: 1; }
+  100% { transform: scale(0) rotate(-24deg); opacity: 0; }
+}
+.dino-clear {
+  animation: dino-clear-out 0.26s ease-in forwards;
+}
+
+@keyframes dino-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-14%); }
+  75% { transform: translateX(14%); }
+}
+.dino-shake {
+  animation: dino-shake 0.18s ease-in-out 2;
+}
+
+@keyframes dino-selected-pulse {
+  0%, 100% { transform: scale(0.95); }
+  50% { transform: scale(1.02); }
+}
+.dino-selected {
+  animation: dino-selected-pulse 0.9s ease-in-out infinite;
+}
+
 /* Ambient glow effect */
 .ambient-glow {
   position: fixed;
