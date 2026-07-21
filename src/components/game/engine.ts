@@ -93,6 +93,21 @@ export function hasPossibleMove(b: Board): boolean {
   return false;
 }
 
+/**
+ * Deterministic, match-free starter board used for the server render only.
+ * It carries no randomness so SSR and the first client render agree (no
+ * hydration mismatch); the real randomized board is generated on mount.
+ */
+export function initialBoard(): Board {
+  const b: Board = new Array(CELLS).fill(0);
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      b[idx(r, c)] = (r + c) % KIND_COUNT;
+    }
+  }
+  return b;
+}
+
 /** Fresh board with no pre-existing matches and at least one legal move. */
 export function createBoard(): Board {
   let b: Board;

@@ -9,6 +9,7 @@ import {
   createBoard,
   findMatches,
   hasPossibleMove,
+  initialBoard,
   isAdjacent,
   reshuffle,
 } from "@/components/game/engine";
@@ -19,7 +20,9 @@ const START_MOVES = 25;
 const delay = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
 
 export default function GamePage() {
-  const [board, setBoard] = useState<Board>(() => createBoard());
+  // Server renders the deterministic starter board; the randomized board is
+  // generated on mount so SSR and hydration agree.
+  const [board, setBoard] = useState<Board>(initialBoard);
   const [selected, setSelected] = useState<number | null>(null);
   const [clearing, setClearing] = useState<Set<number>>(new Set());
   const [invalid, setInvalid] = useState<[number, number] | null>(null);
@@ -39,6 +42,11 @@ export default function GamePage() {
     setMoves(START_MOVES);
     setCombo(0);
     setStatus("playing");
+  }, []);
+
+  // Swap the deterministic SSR board for a real randomized one after mount.
+  useEffect(() => {
+    setBoard(createBoard());
   }, []);
 
   // Win / lose detection once the board settles.
