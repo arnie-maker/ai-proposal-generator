@@ -85,29 +85,30 @@
   .manualonly { display:none; }
   body.manual .manualonly { display:flex; }
   body.tiltmode .wheel { display:none; }
-  .gas-btn { color:#8dff9a; border-color:rgba(80,240,120,0.8); background:radial-gradient(circle at 50% 35%, rgba(60,220,90,0.34), rgba(4,20,8,0.85)); box-shadow:0 0 24px rgba(60,220,90,0.32); }
-  .gas-btn.active { box-shadow:0 0 42px rgba(60,220,90,0.75); }
-  .brake-btn { color:#ffb0b0; border-color:rgba(255,90,90,0.8); background:radial-gradient(circle at 50% 35%, rgba(255,70,70,0.3), rgba(20,6,6,0.85)); box-shadow:0 0 22px rgba(255,70,70,0.28); }
+  .gas-btn { color:#a8ffb8; border-color:rgba(120,240,150,0.5); background:linear-gradient(160deg,rgba(50,120,70,0.28),rgba(8,20,12,0.55)); }
+  .gas-btn.active { box-shadow:0 0 28px rgba(60,220,90,0.6), inset 0 1px 0 rgba(255,255,255,0.2); background:linear-gradient(160deg,rgba(60,200,100,0.42),rgba(10,30,16,0.6)); }
+  .brake-btn { color:#ffc2c2; border-color:rgba(255,120,120,0.5); background:linear-gradient(160deg,rgba(140,50,50,0.26),rgba(20,6,6,0.55)); }
   .draftind { pointer-events:none; position:absolute; left:50%; top:32%; transform:translateX(-50%); font-size:16px; font-weight:900; letter-spacing:.1em; color:#8affff; text-shadow:0 0 14px rgba(0,229,255,0.7); opacity:0; transition:opacity .15s; }
   .draftind.on { opacity:1; }
   .tiltcal { display:none; }
   @keyframes nglow { to { box-shadow:0 0 12px rgba(0,229,255,0.9); } }
 
   .actions { pointer-events:none; position:absolute; right:16px; bottom:calc(env(safe-area-inset-bottom) + 18px); display:flex; align-items:flex-end; gap:12px; }
-  .act-btn { pointer-events:auto; touch-action:none; width:82px; height:82px; border-radius:50%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; cursor:pointer; font-weight:800; letter-spacing:.04em; font-size:11px; border:3px solid; transition:transform .1s ease; position:relative; }
-  .act-btn .rk { font-size:24px; }
-  .act-btn:active, .act-btn.active { transform:scale(0.92); }
-  .nitro-btn { color:#8affff; border-color:rgba(80,240,255,0.8); background:radial-gradient(circle at 50% 35%, rgba(60,220,255,0.36), rgba(4,16,20,0.85)); box-shadow:0 0 26px rgba(60,220,255,0.35); }
-  .nitro-btn.active { box-shadow:0 0 46px rgba(60,220,255,0.8); }
-  .nitro-btn:disabled, .nitro-btn.empty { opacity:0.4; }
-  .drift-btn { color:#ffd18a; border-color:rgba(255,170,60,0.8); background:radial-gradient(circle at 50% 35%, rgba(255,150,50,0.34), rgba(20,10,4,0.85)); box-shadow:0 0 24px rgba(255,150,40,0.3); }
-  .fire-btn { color:#ff9db0; border-color:rgba(255,70,110,0.8); background:radial-gradient(circle at 50% 35%, rgba(255,50,90,0.34), rgba(18,4,8,0.85)); box-shadow:0 0 24px rgba(255,60,90,0.32); }
-  .fire-btn.active { box-shadow:0 0 42px rgba(255,60,90,0.75); }
-  .drift-btn.active { box-shadow:0 0 42px rgba(255,150,40,0.75); }
+  .act-btn { pointer-events:auto; touch-action:none; width:74px; height:74px; border-radius:24px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; cursor:pointer; font-weight:700; letter-spacing:.06em; font-size:9.5px; text-transform:uppercase; border:1.5px solid; -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); box-shadow:0 8px 22px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.14); transition:transform .09s ease, box-shadow .12s ease; position:relative; }
+  .act-btn .rk { font-size:23px; line-height:1; filter:drop-shadow(0 1px 3px rgba(0,0,0,0.5)); }
+  .act-btn:active, .act-btn.active { transform:scale(0.93) translateY(1px); }
+  .nitro-btn { color:#9ff6ff; border-color:rgba(120,240,255,0.5); background:linear-gradient(160deg,rgba(40,130,160,0.3),rgba(6,18,24,0.55)); }
+  .nitro-btn.active { box-shadow:0 0 30px rgba(60,220,255,0.65), inset 0 1px 0 rgba(255,255,255,0.2); background:linear-gradient(160deg,rgba(50,190,230,0.44),rgba(8,24,32,0.6)); }
+  .nitro-btn:disabled, .nitro-btn.empty { opacity:0.38; }
+  .drift-btn { color:#ffdca6; border-color:rgba(255,190,110,0.5); background:linear-gradient(160deg,rgba(150,100,40,0.28),rgba(20,12,4,0.55)); }
+  .fire-btn { color:#ffb3c4; border-color:rgba(255,130,160,0.5); background:linear-gradient(160deg,rgba(150,50,80,0.28),rgba(18,6,10,0.55)); }
+  .fire-btn.active { box-shadow:0 0 30px rgba(255,80,120,0.6), inset 0 1px 0 rgba(255,255,255,0.2); }
+  .drift-btn.active { box-shadow:0 0 30px rgba(255,170,70,0.6), inset 0 1px 0 rgba(255,255,255,0.2); }
 
-  .wheel { pointer-events:auto; touch-action:none; position:absolute; left:16px; bottom:calc(env(safe-area-inset-bottom) + 18px); width:128px; height:128px; border-radius:50%; border:2px dashed rgba(0,229,255,0.28); background:radial-gradient(circle at 50% 50%, rgba(0,229,255,0.05), rgba(6,8,20,0.35)); display:flex; align-items:center; justify-content:center; }
-  .wheel .knob { width:56px; height:56px; border-radius:50%; background:radial-gradient(circle,#00e5ff,#4f6ef7); box-shadow:0 0 22px rgba(0,229,255,0.6); transition:transform .04s linear; }
-  .wheel .wl { position:absolute; bottom:-16px; left:50%; transform:translateX(-50%); font-size:9px; letter-spacing:.14em; text-transform:uppercase; color:#7c8bb0; white-space:nowrap; }
+  .wheel { pointer-events:auto; touch-action:none; position:absolute; left:16px; bottom:calc(env(safe-area-inset-bottom) + 18px); width:132px; height:132px; border-radius:50%; border:1.5px solid rgba(255,255,255,0.16); background:radial-gradient(circle at 50% 38%, rgba(70,100,150,0.2), rgba(10,14,26,0.5)); -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px); box-shadow:0 10px 30px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.12), inset 0 0 40px rgba(0,229,255,0.06); display:flex; align-items:center; justify-content:center; }
+  .wheel::before { content:""; position:absolute; inset:14px; border-radius:50%; border:1px solid rgba(255,255,255,0.06); }
+  .wheel .knob { width:58px; height:58px; border-radius:50%; background:linear-gradient(155deg,#e8f2ff,#5a7bf7 70%,#4457d8); box-shadow:0 6px 18px rgba(0,0,0,0.5), 0 0 20px rgba(90,140,255,0.45), inset 0 2px 4px rgba(255,255,255,0.5); border:1px solid rgba(255,255,255,0.35); transition:transform .04s linear; }
+  .wheel .wl { position:absolute; bottom:-16px; left:50%; transform:translateX(-50%); font-size:9px; letter-spacing:.16em; text-transform:uppercase; color:#7c8bb0; white-space:nowrap; }
   @media (hover:hover) and (pointer:fine) and (min-width:900px) { .actions, .wheel { display:none; } }
 
   .popups { pointer-events:none; position:absolute; inset:0; overflow:hidden; }
@@ -4690,10 +4691,13 @@ three/build/three.module.js:
   }
   for(let k=0;k<7;k++){const idx=Math.floor((k+0.5)/7*NODES);if(inLoopRange(idx))continue;makeRamp(track[idx]);ramps.push(idx);}
   const nitroPads=[];for(let k=0;k<14;k++){const idx=Math.floor((k+0.3)/14*NODES);if(ramps.includes(idx)||inLoopRange(idx))continue;const n=track[idx];const pad=new THREE.Mesh(new THREE.PlaneGeometry(ROAD_HW*1.1,3.4),new THREE.MeshBasicMaterial({color:0x33e0ff,transparent:true,opacity:0.34,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,depthWrite:false}));pad.rotation.x=-Math.PI/2;pad.rotation.z=-Math.atan2(n.tx,n.tz);pad.position.set(n.x,n.y+0.14,n.z);scene.add(pad);nitroPads.push({idx,used:0});}
-  // floating coin pickups along the track
-  const coinPads=[];const coinGeo=new THREE.CylinderGeometry(1.0,1.0,0.18,16);const coinMat=new THREE.MeshStandardMaterial({color:0xffe08a,emissive:0xffc24a,emissiveIntensity:2.4,metalness:0.6,roughness:0.3});
-  const coinBeamGeo=new THREE.CylinderGeometry(0.16,0.16,5,6),coinBeamMat=new THREE.MeshBasicMaterial({color:0xffd76a,transparent:true,opacity:0.4,blending:THREE.AdditiveBlending,depthWrite:false,fog:false});
-  for(let k=0;k<40;k++){const idx=Math.floor((k+0.42)/40*NODES);if(ramps.includes(idx)||inLoopRange(idx))continue;const n=track[idx];const lane=(Math.random()-0.5)*ROAD_HW*1.5;const grp=new THREE.Group();const m=new THREE.Mesh(coinGeo,coinMat);m.rotation.x=Math.PI/2;grp.add(m);const beam=new THREE.Mesh(coinBeamGeo,coinBeamMat);beam.position.y=2.2;grp.add(beam);grp.position.set(n.x+n.nx*lane,n.y+1.4,n.z+n.nz*lane);scene.add(grp);coinPads.push({idx,lane,mesh:grp,used:0});}
+  // ---- ORB RIBBON: a dense stream of collectibles that SNAKES across the road → you actively steer to grab it ----
+  const coinPads=[];const coinGeo=new THREE.OctahedronGeometry(0.72,0);const coinMat=new THREE.MeshStandardMaterial({color:0xffe08a,emissive:0xffc24a,emissiveIntensity:2.6,metalness:0.4,roughness:0.28});
+  const NORB=140, WEAVES=6;   // count + how many left/right weaves around the whole loop (followable rhythm)
+  for(let k=0;k<NORB;k++){const idxF=(k+0.5)/NORB*NODES;const ii=Math.floor(idxF)%NODES;if(ramps.includes(ii)||inLoopRange(ii))continue;const n=track[ii];
+    const lane=Math.sin((k/NORB)*Math.PI*2*WEAVES)*(ROAD_HW-2.6);          // the snaking line
+    const m=new THREE.Mesh(coinGeo,coinMat);m.position.set(n.x+n.nx*lane,n.y+1.2,n.z+n.nz*lane);scene.add(m);
+    coinPads.push({idx:idxF,lane,mesh:m,used:0});}
   // on-track power-ups: shield / x2 / magnet / repair / overdrive
   const PW_TYPES=[{t:"shield",c:0x66ccff},{t:"x2",c:0x66ffcc},{t:"magnet",c:0xb060ff},{t:"repair",c:0x66ff88},{t:"od",c:0xffd76a}];
   const powerups=[];const pwGeo=new THREE.OctahedronGeometry(1.35,0);
@@ -5111,7 +5115,7 @@ three/build/three.module.js:
       // ---- steering = lane change across the road; drift charges nitro ----
       let steer=s.steer;if(keys.has("arrowleft")||keys.has("a"))steer-=1;if(keys.has("arrowright")||keys.has("d"))steer+=1;steer=Math.max(-1,Math.min(1,steer));
       const drifting=(s.drift||keys.has("arrowdown")||keys.has("s")||keys.has(" "))&&Math.abs(steer)>0.15&&s.air<=0;
-      const laneSpd=drifting?TURN_LANE*1.6:TURN_LANE*1.15;      // snappier lane response → feels connected
+      const laneSpd=drifting?TURN_LANE*1.9:TURN_LANE*1.7;       // strong, direct steering → you clearly weave the car yourself
       s.lane+=steer*laneSpd*dt*tScale;
       s.camSwing+=(steer-s.camSwing)*Math.min(1,dt*7);          // smoothed steer for camera swing (driving feel)
       const edge=ROAD_HW-1.4;
@@ -5164,13 +5168,16 @@ three/build/three.module.js:
       // ---- nitro pads ----
       for(const p of nitroPads){let d=Math.abs(((s.t-p.idx+NODES)%NODES));if(d>NODES/2)d=NODES-d;if(d<0.7&&!p.used){p.used=1;addNitro(0.3*NITRO_MUL);audio.coin();setTimeout(()=>p.used=0,4000);}}
       // ---- coin pickups ----
-      const magR=s.pw.magnet>0?9.5:5.2;   // easier coin vacuuming → constant pickup dopamine
-      if(s.coinComboT>0){s.coinComboT-=dt;if(s.coinComboT<=0)s.coinCombo=0;}
-      for(const p of coinPads){if(p.mesh.visible)p.mesh.rotation.z+=dt*4;let d=Math.abs(((s.t-p.idx+NODES)%NODES));if(d>NODES/2)d=NODES-d;if(d<1.0&&!p.used&&Math.abs(p.lane-s.lane)<magR){p.used=1;p.mesh.visible=false;
-        s.coinCombo=(s.coinCombo||0)+1;s.coinComboT=1.6;const c=Math.round((16+Math.floor(Math.random()*18))*COIN_MUL);addCoins(c);s.coinsRun+=c;addScore(30+s.coinCombo*6);
-        if(s.coinCombo===1||s.coinCombo%4===0)popup("+"+c+"💰"+(s.coinCombo>2?" ×"+s.coinCombo:""),0xffd76a,p.mesh.position.x,2,p.mesh.position.z);   // only the occasional popup — no spam
-        splat(p.mesh.position.x,1.4,p.mesh.position.z,0xffd76a,5);audio.ding&&audio.ding(s.coinCombo);
-        setTimeout(()=>{if(state.phase==="playing"){p.used=0;p.mesh.visible=true;}},3200);}}
+      const magR=s.pw.magnet>0?7.5:2.7;   // TIGHT grab — you must actually steer onto the orb (that's the agency)
+      if(s.coinComboT>0){s.coinComboT-=dt;if(s.coinComboT<=0){if(s.coinCombo>6)popup("LINE ×"+s.coinCombo+" done",0xffd76a,car.position.x,2.6,car.position.z);s.coinCombo=0;}}
+      for(const p of coinPads){if(p.mesh.visible){p.mesh.rotation.y+=dt*3;p.mesh.position.y=trackAt(p.idx).y+1.2+Math.sin(time*4+p.idx)*0.12;}
+        let d=Math.abs(((s.t-p.idx+NODES)%NODES));if(d>NODES/2)d=NODES-d;
+        if(d<1.1&&!p.used&&Math.abs(p.lane-s.lane)<magR){p.used=1;p.mesh.visible=false;
+          s.coinCombo=(s.coinCombo||0)+1;s.coinComboT=1.1;const c=Math.round((10+s.coinCombo)*COIN_MUL);addCoins(c);s.coinsRun+=c;addScore(20+s.coinCombo*8);
+          addNitro(0.02);s.speed=Math.min(NITRO_SPD,s.speed+1.2);        // every orb nudges you faster → flow reward for a clean line
+          if(s.coinCombo%10===0){bigBanner("PERFECT LINE ×"+s.coinCombo,"#ffd76a");addScore(200);s.heat=Math.min(HEAT_MAX,s.heat+0.8);shakeAdd(0.18);}
+          splat(p.mesh.position.x,1.3,p.mesh.position.z,0xffd76a,3);audio.ding&&audio.ding(s.coinCombo);
+          setTimeout(()=>{if(state.phase==="playing"){p.used=0;p.mesh.visible=true;}},4500);}}
       // power-ups
       for(const p of powerups){if(p.mesh.visible){p.gem.rotation.y+=dt*2.4;p.ring.rotation.z+=dt*1.6;p.mesh.position.y=trackAt(p.idx).y+1.8+Math.sin(time*3+p.idx)*0.2;}let d=Math.abs(((s.t-p.idx+NODES)%NODES));if(d>NODES/2)d=NODES-d;if(d<0.9&&!p.used){p.used=1;p.mesh.visible=false;applyPowerup(p.type);setTimeout(()=>{if(state.phase==="playing"){p.used=0;p.mesh.visible=true;}},12000);}}
       if(s.pw.x2>0)s.pw.x2=Math.max(0,s.pw.x2-dt);if(s.pw.magnet>0)s.pw.magnet=Math.max(0,s.pw.magnet-dt);
