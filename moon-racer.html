@@ -29,7 +29,11 @@
   .tl { position:absolute; top:calc(env(safe-area-inset-top) + 12px); left:14px; padding:8px 12px; }
   .tr { position:absolute; top:calc(env(safe-area-inset-top) + 12px); right:14px; display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
   .label { font-size:9px; letter-spacing:.18em; text-transform:uppercase; color:#64748b; }
-  .score { font-size:22px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1.05; }
+  .score { font-size:22px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1.05; display:inline-block; transform-origin:left center; will-change:transform; }
+  /* big juicy centre banner for milestones & HEAT tier-ups */
+  .bigban { position:absolute; left:50%; top:34%; transform:translate(-50%,-50%) scale(0.4); opacity:0; font-size:44px; font-weight:900; letter-spacing:.02em; white-space:nowrap; text-shadow:0 0 24px rgba(255,180,80,0.9),0 4px 16px rgba(0,0,0,0.6); transition:transform .22s cubic-bezier(.2,1.4,.4,1), opacity .2s; }
+  .bigban.show { transform:translate(-50%,-50%) scale(1); opacity:1; }
+  .bigban.out { transform:translate(-50%,-64%) scale(1.15); opacity:0; transition:transform .5s ease, opacity .5s ease; }
   .chip { pointer-events:auto; padding:7px 11px; font-size:12px; font-weight:700; color:#e2e8f0; cursor:pointer; border-radius:12px; }
   .panel { padding:8px 12px; }
   .lap { font-weight:800; font-size:13px; }
@@ -4231,6 +4235,10 @@ three/build/three.module.js:
     nitro(){if(!this.ctx||!this.sfxGain)return;const t=this.ctx.currentTime;const o=this.ctx.createOscillator();o.type="sawtooth";o.frequency.setValueAtTime(180,t);o.frequency.exponentialRampToValueAtTime(720,t+0.5);const g=this.ctx.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.22,t+0.03);g.gain.exponentialRampToValueAtTime(0.0001,t+0.6);const f=this.ctx.createBiquadFilter();f.type="bandpass";f.frequency.value=800;f.Q.value=2;o.connect(f);f.connect(g);g.connect(this.sfxGain);o.start(t);o.stop(t+0.62);}
     boom(){if(!this.ctx||!this.sfxGain||!this.noiseBuffer)return;const t=this.ctx.currentTime;const s=this.ctx.createBufferSource();s.buffer=this.noiseBuffer;const f=this.ctx.createBiquadFilter();f.type="lowpass";f.frequency.setValueAtTime(1600,t);f.frequency.exponentialRampToValueAtTime(140,t+0.4);const g=this.ctx.createGain();g.gain.setValueAtTime(0.5,t);g.gain.exponentialRampToValueAtTime(0.0001,t+0.45);s.connect(f);f.connect(g);g.connect(this.sfxGain);const o=this.ctx.createOscillator();o.type="sine";o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(45,t+0.4);const og=this.ctx.createGain();og.gain.setValueAtTime(0.5,t);og.gain.exponentialRampToValueAtTime(0.0001,t+0.42);o.connect(og);og.connect(this.sfxGain);s.start(t);s.stop(t+0.46);o.start(t);o.stop(t+0.42);}
     crash(){if(!this.ctx||!this.sfxGain||!this.noiseBuffer)return;const t=this.ctx.currentTime;const s=this.ctx.createBufferSource();s.buffer=this.noiseBuffer;const f=this.ctx.createBiquadFilter();f.type="lowpass";f.frequency.setValueAtTime(2000,t);f.frequency.exponentialRampToValueAtTime(120,t+0.5);const g=this.ctx.createGain();g.gain.setValueAtTime(0.7,t);g.gain.exponentialRampToValueAtTime(0.0001,t+0.6);s.connect(f);f.connect(g);g.connect(this.sfxGain);s.start(t);s.stop(t+0.62);}
+    // rising cascade "ding" — pitch climbs with the combo step (that satisfying slot-machine ladder)
+    ding(step){if(!this.ctx||!this.sfxGain)return;const t=this.ctx.currentTime;const base=520*Math.pow(1.0595,Math.min(28,step||0));const o=this.ctx.createOscillator();o.type="square";o.frequency.setValueAtTime(base,t);const o2=this.ctx.createOscillator();o2.type="triangle";o2.frequency.setValueAtTime(base*2,t);const g=this.ctx.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.17,t+0.01);g.gain.exponentialRampToValueAtTime(0.0001,t+0.16);o.connect(g);o2.connect(g);g.connect(this.sfxGain);o.start(t);o2.start(t);o.stop(t+0.17);o2.stop(t+0.17);}
+    // celebratory arpeggio for tier-ups / milestones
+    fanfare(){if(!this.ctx||!this.sfxGain)return;const t=this.ctx.currentTime;[660,880,1100,1320,1760].forEach((f,i)=>{const o=this.ctx.createOscillator();o.type="square";o.frequency.value=f;const g=this.ctx.createGain();g.gain.setValueAtTime(0.0001,t+i*0.06);g.gain.exponentialRampToValueAtTime(0.16,t+i*0.06+0.02);g.gain.exponentialRampToValueAtTime(0.0001,t+i*0.06+0.22);o.connect(g);g.connect(this.sfxGain);o.start(t+i*0.06);o.stop(t+i*0.06+0.24);});}
   }
 
   /* ============================ CONSTANTS ============================ */
@@ -4609,7 +4617,7 @@ three/build/three.module.js:
   // floating coin pickups along the track
   const coinPads=[];const coinGeo=new THREE.CylinderGeometry(1.0,1.0,0.18,16);const coinMat=new THREE.MeshStandardMaterial({color:0xffe08a,emissive:0xffc24a,emissiveIntensity:2.4,metalness:0.6,roughness:0.3});
   const coinBeamGeo=new THREE.CylinderGeometry(0.16,0.16,5,6),coinBeamMat=new THREE.MeshBasicMaterial({color:0xffd76a,transparent:true,opacity:0.4,blending:THREE.AdditiveBlending,depthWrite:false,fog:false});
-  for(let k=0;k<18;k++){const idx=Math.floor((k+0.62)/18*NODES);if(ramps.includes(idx)||inLoopRange(idx))continue;const n=track[idx];const lane=(Math.random()-0.5)*ROAD_HW*1.3;const grp=new THREE.Group();const m=new THREE.Mesh(coinGeo,coinMat);m.rotation.x=Math.PI/2;grp.add(m);const beam=new THREE.Mesh(coinBeamGeo,coinBeamMat);beam.position.y=2.2;grp.add(beam);grp.position.set(n.x+n.nx*lane,n.y+1.4,n.z+n.nz*lane);scene.add(grp);coinPads.push({idx,lane,mesh:grp,used:0});}
+  for(let k=0;k<40;k++){const idx=Math.floor((k+0.42)/40*NODES);if(ramps.includes(idx)||inLoopRange(idx))continue;const n=track[idx];const lane=(Math.random()-0.5)*ROAD_HW*1.5;const grp=new THREE.Group();const m=new THREE.Mesh(coinGeo,coinMat);m.rotation.x=Math.PI/2;grp.add(m);const beam=new THREE.Mesh(coinBeamGeo,coinBeamMat);beam.position.y=2.2;grp.add(beam);grp.position.set(n.x+n.nx*lane,n.y+1.4,n.z+n.nz*lane);scene.add(grp);coinPads.push({idx,lane,mesh:grp,used:0});}
   // on-track power-ups: shield / x2 / magnet / repair / overdrive
   const PW_TYPES=[{t:"shield",c:0x66ccff},{t:"x2",c:0x66ffcc},{t:"magnet",c:0xb060ff},{t:"repair",c:0x66ff88},{t:"od",c:0xffd76a}];
   const powerups=[];const pwGeo=new THREE.OctahedronGeometry(1.35,0);
@@ -4707,7 +4715,13 @@ three/build/three.module.js:
   function popup(text,colorHex,wx,wy,wz){const v=new THREE.Vector3(wx,wy||2,wz).project(camera);if(v.z>1)return;const sx=(v.x*0.5+0.5)*app.clientWidth,sy=(-v.y*0.5+0.5)*app.clientHeight;const d=document.createElement("div");d.className="pop";d.textContent=text;d.style.left=sx+"px";d.style.top=sy+"px";d.style.color="#"+("000000"+(colorHex||0xffffff).toString(16)).slice(-6);d.style.fontSize="16px";el.popups.appendChild(d);setTimeout(()=>d.remove(),1000);}
   function toast(text,color){const d=document.createElement("div");d.className="toast glass";d.textContent=text;d.style.color=color||"#fff";el.toasts.appendChild(d);setTimeout(()=>d.remove(),1900);}
   function shakeAdd(a){state.shake=Math.min(0.8,state.shake+a);}
-  function addScore(n){n=Math.round(n*(state.odActive>0?2:1)*(state.pw&&state.pw.x2>0?2:1)*Math.max(1,state.heat||1));state.score+=n;el.score.textContent=state.score.toLocaleString();if(state.score>meta.best)el.best.textContent=state.score.toLocaleString();}
+  let _scorePunch=0;
+  function _updScore(){el.score.textContent=state.score.toLocaleString();if(state.score>meta.best)el.best.textContent=state.score.toLocaleString();}
+  function addScore(n){n=Math.round(n*(state.odActive>0?2:1)*(state.pw&&state.pw.x2>0?2:1)*Math.max(1,state.heat||1));if(n<=0)return;state.score+=n;_updScore();if(n>=40)_scorePunch=Math.min(1,_scorePunch+0.6);checkMilestone();}
+  function checkMilestone(){if(state.score>=state.nextMile){const m=state.nextMile;state.nextMile+= (m>=50000?25000:m>=20000?10000:5000);bigBanner("★ "+m.toLocaleString()+" ★","#ffd76a");audio.fanfare&&audio.fanfare();shakeAdd(0.35);flashHeat&&flashHeat();for(let i=0;i<3;i++)setTimeout(()=>{if(state.phase==="playing")splat(car.position.x,1.2,car.position.z,0xffd76a,10);},i*90);}}
+  function heatTierUp(t){bigBanner("🔥 HEAT ×"+t,"#ff7a3c");audio.fanfare&&audio.fanfare();audio.ding&&audio.ding(t+6);shakeAdd(0.28);flashHeat&&flashHeat();}
+  // big juicy centre banner (scale-in punch, fades). Pooled-lite: one node per call, auto-removed.
+  function bigBanner(text,color){const d=document.createElement("div");d.className="bigban";d.textContent=text;d.style.color=color||"#fff";el.popups.appendChild(d);requestAnimationFrame(()=>d.classList.add("show"));setTimeout(()=>{d.classList.add("out");},600);setTimeout(()=>d.remove(),1100);}
   let _heatFlashT=0;function flashHeat(){_heatFlashT=0.5;}
   function addNitro(n){state.nitro=Math.min(1,state.nitro+n);}
   function takedown(r,wx,wz){if(!r.alive)return;r.alive=false;
@@ -4721,7 +4735,7 @@ three/build/three.module.js:
     setTimeout(()=>{if(state.phase==="playing"){r.t=(state.t+NODES*0.5)%NODES;r.lane=(Math.random()-0.5)*ROAD_HW*1.2;r.alive=true;r.mesh.visible=true;r.nm=false;r.launch=null;r.hp=RIVAL_HP;}},3500);}
   function hurt(){if(state.invuln>0||state.odActive>0)return;if(state.pw&&state.pw.shield>0){state.pw.shield=0;state.invuln=1.0;shakeAdd(0.3);toast("🛡️ Shield absorbed it!","#66ccff");return;}state.hp--;state.hitThisRun=true;state.invuln=1.3;state.hurtT=0.4;state.speed*=0.5;comboBreak();audio.crash();shakeAdd(0.5);
     if(state.heat>2.2)popup("HEAT LOST ×"+state.heat.toFixed(1),0xff4d6a,car.position.x,3,car.position.z);
-    state.heat=1;state.noHit=0;state._flaw=0;state.redline=0;                 // crash wipes your multiplier — the sting that makes you careful
+    state.heat=1;state.heatTier=1;state.noHit=0;state._flaw=0;state.redline=0;                 // crash wipes your multiplier — the sting that makes you careful
     if(state.hp<=0)endGame(false);}
 
   /* ===== session missions (Zeigarnik open loops) ===== */
@@ -4908,7 +4922,7 @@ three/build/three.module.js:
     state.mult=1;state.chain=0;state.chainT=0;state.maxChain=0;state.driftTime=0;state.nitroTime=0;state.dist=0;state.topSpeed=0;state.coinsRun=0;state.newBest=false;state.crateOpened=false;
     state.driftHold=0;state.hitStop=0;state.hitThisRun=false;state.gambled=false;state.diff=1;state.firing=0;state.fireTimer=0;bolts.forEach(b=>{b.active=false;b.mesh.visible=false;});
     state.gas=0;state.braking=0;state.od=0;state.odActive=0;state.draft=0;state.pw={shield:0,x2:0,magnet:0};applyControlMode();powerups.forEach(p=>{p.used=0;p.mesh.visible=true;});
-    state.heat=1;state.redline=0;state.noHit=0;state._flaw=0;state.slowmo=0;state.camSwing=0;document.body.classList.add("playing");
+    state.heat=1;state.heatTier=1;state.redline=0;state.noHit=0;state._flaw=0;state.slowmo=0;state.camSwing=0;state.scoreAcc=0;state.nextMile=5000;state.coinRun=0;document.body.classList.add("playing");
     crates.forEach(c=>{c.used=0;c.mesh.visible=true;});assignNemesis();
     // ---- PERFECT LAUNCH: a quick rev-timing bar at the lights → nail it for a boost (a ritual every run) ----
     state.launchT=1.4;state.launchLocked=0;showLaunch();
@@ -4961,7 +4975,8 @@ three/build/three.module.js:
       // ---- perfect-launch marker sweep ----
       if(s.launchActive){s.launchT+=dt/1.4;el.launchMark.style.left=(Math.min(1,s.launchT)*100).toFixed(1)+"%";if(s.launchT>=1.08&&!s.launchLocked){s.launchLocked=1;el.launchTxt.textContent="TOO LATE";el.launchTxt.style.color="#ff8a8a";setTimeout(hideLaunch,500);}}
       // ---- bullet-time: near-misses briefly slow the WORLD (not the UI) for a dopamine beat ----
-      if(s.slowmo>0)s.slowmo=Math.max(0,s.slowmo-dt);
+      if(s.slowmo>0)s.slowmo=Math.max(0,s.slowmo-dt);if(s.slowmoCd>0)s.slowmoCd-=dt;
+      if(s.passComboT>0){s.passComboT-=dt;if(s.passComboT<=0)s.passCombo=0;}
       const tScale=s.slowmo>0?0.34:1;                          // world time-scale
       // ---- throttle: auto-cruise or manual gas/brake; nitro & overdrive stack on top ----
       const manual=meta.throttle==="manual";
@@ -5004,6 +5019,10 @@ three/build/three.module.js:
       s.heat+=(risky?(0.5+spF*0.8+(boosting||drifting?0.6:0)):-1.1)*dt;   // climbs while you push, bleeds fast when you coast/brake
       if(brakeOn)s.heat-=0.6*dt;
       s.heat=Math.max(1,Math.min(HEAT_MAX,s.heat));
+      // HEAT tier-up celebration (every whole × is a little party)
+      {const ht=Math.floor(s.heat);if(ht>(s.heatTier||1)){s.heatTier=ht;heatTierUp(ht);}else if(ht<(s.heatTier||1))s.heatTier=ht;}
+      // ---- CONSTANT SCORE FLOW: the number never stops climbing while you drive (×HEAT) → dopamine drip ----
+      if(spF>0.3){s.scoreAcc=(s.scoreAcc||0)+s.speed*dt*0.11*s.heat;if(s.scoreAcc>=1){const add=Math.floor(s.scoreAcc);s.scoreAcc-=add;s.score+=add;_updScore();checkMilestone();}}
       s.noHit+=dt;                                              // flawless timer (no-hit streak feeds heat)
       if(s.noHit>6&&!s._flaw){s._flaw=1;s.heat=Math.min(HEAT_MAX,s.heat+0.8);addNitro(0.1);toast("✦ FLAWLESS RUN","#8affff");}
       // ---- REDLINE: hold near top speed to fill a bar → euphoric payout ----
@@ -5035,8 +5054,13 @@ three/build/three.module.js:
       // ---- nitro pads ----
       for(const p of nitroPads){let d=Math.abs(((s.t-p.idx+NODES)%NODES));if(d>NODES/2)d=NODES-d;if(d<0.7&&!p.used){p.used=1;addNitro(0.3*NITRO_MUL);audio.coin();setTimeout(()=>p.used=0,4000);}}
       // ---- coin pickups ----
-      const magR=s.pw.magnet>0?7.5:3.4;
-      for(const p of coinPads){if(p.mesh.visible)p.mesh.rotation.z+=dt*3;let d=Math.abs(((s.t-p.idx+NODES)%NODES));if(d>NODES/2)d=NODES-d;if(d<0.9&&!p.used&&Math.abs(p.lane-s.lane)<magR){p.used=1;p.mesh.visible=false;const c=Math.round((14+Math.floor(Math.random()*16))*COIN_MUL);addCoins(c);s.coinsRun+=c;popup("+"+c+"💰",0xffd76a,p.mesh.position.x,2,p.mesh.position.z);audio.coin&&audio.coin();setTimeout(()=>{if(state.phase==="playing"){p.used=0;p.mesh.visible=true;}},6000);}}
+      const magR=s.pw.magnet>0?9.5:5.2;   // easier coin vacuuming → constant pickup dopamine
+      if(s.coinComboT>0){s.coinComboT-=dt;if(s.coinComboT<=0)s.coinCombo=0;}
+      for(const p of coinPads){if(p.mesh.visible)p.mesh.rotation.z+=dt*4;let d=Math.abs(((s.t-p.idx+NODES)%NODES));if(d>NODES/2)d=NODES-d;if(d<1.0&&!p.used&&Math.abs(p.lane-s.lane)<magR){p.used=1;p.mesh.visible=false;
+        s.coinCombo=(s.coinCombo||0)+1;s.coinComboT=1.6;const c=Math.round((16+Math.floor(Math.random()*18))*COIN_MUL);addCoins(c);s.coinsRun+=c;addScore(30+s.coinCombo*6);
+        popup("+"+c+"💰"+(s.coinCombo>2?" ×"+s.coinCombo:""),0xffd76a,p.mesh.position.x,2,p.mesh.position.z);
+        splat(p.mesh.position.x,1.4,p.mesh.position.z,0xffd76a,5);audio.ding&&audio.ding(s.coinCombo);
+        setTimeout(()=>{if(state.phase==="playing"){p.used=0;p.mesh.visible=true;}},3200);}}
       // power-ups
       for(const p of powerups){if(p.mesh.visible){p.gem.rotation.y+=dt*2.4;p.ring.rotation.z+=dt*1.6;p.mesh.position.y=trackAt(p.idx).y+1.8+Math.sin(time*3+p.idx)*0.2;}let d=Math.abs(((s.t-p.idx+NODES)%NODES));if(d>NODES/2)d=NODES-d;if(d<0.9&&!p.used){p.used=1;p.mesh.visible=false;applyPowerup(p.type);setTimeout(()=>{if(state.phase==="playing"){p.used=0;p.mesh.visible=true;}},12000);}}
       if(s.pw.x2>0)s.pw.x2=Math.max(0,s.pw.x2-dt);if(s.pw.magnet>0)s.pw.magnet=Math.max(0,s.pw.magnet-dt);
@@ -5088,10 +5112,10 @@ three/build/three.module.js:
           takedown(r,r.mesh.position.x,r.mesh.position.z);   // the other car always gets launched & explodes
           if(!fast)hurt();                                    // ...but a slow clip damages you too
           else{s.heat=Math.min(HEAT_MAX,s.heat+(wasNem?1.4:0.5));comboEsc(wasNem);if(wasNem){addScore(500);toast("☠ NEMESIS DOWN +500","#ffd76a");}}
-        } else if(Math.abs(dT)<0.7&&laneGap<5.0&&!r.nm){r.nm=true;
-          // ---- PERFECT PASS: a high-speed near-miss triggers bullet-time + a heat surge (Burnout-style rush) ----
-          const fast=s.speed>CRUISE*1.05;
-          if(fast){s.slowmo=0.5;s.heat=Math.min(HEAT_MAX,s.heat+0.6);addScore(160);addNitro(0.14);popup("⚡ PERFECT PASS!",0x8affff,r.mesh.position.x,2.4,r.mesh.position.z);audio.power&&audio.power();shakeAdd(0.18);}
+        } else if(Math.abs(dT)<0.85&&laneGap<6.0&&!r.nm){r.nm=true;
+          // ---- PERFECT PASS: a near-miss triggers a heat surge (+ bullet-time when you're really flying) ----
+          const fast=s.speed>CRUISE*0.98;s.passCombo=(s.passCombo||0)+1;s.passComboT=2.5;
+          if(fast){if((s.slowmoCd||0)<=0){s.slowmo=0.45;s.slowmoCd=1.4;}s.heat=Math.min(HEAT_MAX,s.heat+0.7);addScore(160+s.passCombo*20);addNitro(0.14);popup("⚡ PERFECT PASS ×"+s.passCombo,0x8affff,r.mesh.position.x,2.4,r.mesh.position.z);audio.ding&&audio.ding(6+s.passCombo);shakeAdd(0.16);}
           else{addScore(90);addNitro(0.08);popup("CLOSE! +90",0xffe08a,r.mesh.position.x,2,r.mesh.position.z);}
           if(s.odActive<=0)s.od=Math.min(1,s.od+0.05);meta.tot.near++;missionEvent("near",1);}
         if(dT>0.4&&dT<2.6&&laneGap<3.6)s.draft=1;   // slipstream: tucked in behind a rival
@@ -5105,6 +5129,7 @@ three/build/three.module.js:
       const spN=Math.min(1,s.speed/NITRO_SPD);const kmh=Math.round(s.speed*2.4);el.spVal.textContent=kmh;el.spFill.style.width=(spN*100)+"%";
       if(kmh>s.topSpeed){s.topSpeed=kmh;missionEvent("top",kmh);}missionEvent("score",s.score);
       el.nFill.style.width=(s.nitro*100)+"%";el.nbar.classList.toggle("nfull",s.nitro>=0.999);
+      if(_scorePunch>0){el.score.style.transform="scale("+(1+_scorePunch*0.55).toFixed(3)+")";_scorePunch=Math.max(0,_scorePunch-dt*4);}else if(el.score.style.transform)el.score.style.transform="scale(1)";
       // HEAT badge + redline + euphoria vignette
       const heatN=(s.heat-1)/(HEAT_MAX-1);
       el.heatBigV.textContent="×"+s.heat.toFixed(1);el.heatBig.classList.toggle("hot",s.heat>=3);
